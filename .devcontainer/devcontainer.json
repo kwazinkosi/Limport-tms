@@ -1,0 +1,37 @@
+{
+  "name": "Transport Management Service",
+  "image": "mcr.microsoft.com/devcontainers/java:17",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installMaven": true,
+      "installGradle": false
+    }
+  },
+  "forwardPorts": [8081, 8084, 6379, 9092, 8025],
+  "remoteEnv": {
+    "SPRING_PROFILES_ACTIVE": "codespaces"
+  },
+  "postCreateCommand": "echo 'Setting up Transport Management Service development environment...'",
+  "postStartCommand": "if [ -d '../limport-platform' ]; then cd ../limport-platform && docker compose up -d && echo 'Shared infrastructure started'; elif [ -d '../Limport-platform' ]; then cd ../Limport-platform && docker compose up -d && echo 'Shared infrastructure started'; fi; docker compose up -d && echo 'Notification Service started'",
+  "shutdownAction": "stopCompose",
+  "mounts": [
+    "source=maven-cache,target=/root/.m2,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-spring-boot",
+        "vscjava.vscode-spring-initializr",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "java.server.launchMode": "Standard",
+        "spring-boot.ls.problem.application-properties.enabled": true
+      }
+    }
+  }
+}

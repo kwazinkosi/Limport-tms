@@ -1,0 +1,47 @@
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle/
+build/
+
+# IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Devcontainer
+.devcontainer/*.local*
+.devcontainer/*.env
+
+# Others
+node_modules/
+.env
+.env.*
+.mvn/
+
+# Test output
+/test-output/
+
+# Redis, Kafka, Docker
+*.pid
+docker-compose.override.yml
