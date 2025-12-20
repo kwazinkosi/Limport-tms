@@ -1,27 +1,27 @@
-package com.limport.tms.application.dto.request;
+package com.limport.tms.application.command;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
- * Request payload for assigning a transport request to a provider/vehicle.
+ * Command to assign an existing transport request to a provider and vehicle.
  */
-public class AssignProviderRequest {
+public class AssignProviderToTransportRequestCommand {
 
-    @NotBlank
+    private UUID transportRequestId;
     private String providerId;
-
-    @NotBlank
     private String vehicleId;
-
-    @NotNull
     private LocalDateTime scheduledPickup;
-
-    @NotNull
     private LocalDateTime scheduledDelivery;
-
     private String assignmentNotes;
+
+    public UUID getTransportRequestId() {
+        return transportRequestId;
+    }
+
+    public void setTransportRequestId(UUID transportRequestId) {
+        this.transportRequestId = transportRequestId;
+    }
 
     public String getProviderId() {
         return providerId;
@@ -63,4 +63,3 @@ public class AssignProviderRequest {
         this.assignmentNotes = assignmentNotes;
     }
 }
-

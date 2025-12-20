@@ -1,0 +1,7 @@
+1. Clean Architecture (priority -10/10)
+2. SOLID principles (priority - 10/10)
+3. Good Design patterns (where applicable) - 7/10
+4. Event driven (priority -7/10)
+5. DDD (where needed) (priority - 6/10)
+6. state of the art design (priority -8/10)
+7. simplicity (where applicable) (priority - 5/10)

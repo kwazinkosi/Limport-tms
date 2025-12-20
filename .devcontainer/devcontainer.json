@@ -1,24 +1,24 @@
 {
   "name": "Transport Management Service",
-  "image": "mcr.microsoft.com/devcontainers/java:17",
+   "image": "mcr.microsoft.com/devcontainers/java:17",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "17",
-      "installMaven": true,
-      "installGradle": false
-    }
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
-  "forwardPorts": [8081, 8084, 6379, 9092, 8025],
+
+  "forwardPorts": [8081, 8025, 5540, 6379, 9094],
+
   "remoteEnv": {
     "SPRING_PROFILES_ACTIVE": "codespaces"
   },
-  "postCreateCommand": "echo 'Setting up Transport Management Service development environment...'",
-  "postStartCommand": "if [ -d '../limport-platform' ]; then cd ../limport-platform && docker compose up -d && echo 'Shared infrastructure started'; elif [ -d '../Limport-platform' ]; then cd ../Limport-platform && docker compose up -d && echo 'Shared infrastructure started'; fi; docker compose up -d && echo 'Notification Service started'",
-  "shutdownAction": "stopCompose",
+
+  "postCreateCommand": "echo 'Transport Management Service dev container created ✔'",
+
+  "postStartCommand": "bash .devcontainer/startup.sh",
+
   "mounts": [
     "source=maven-cache,target=/root/.m2,type=volume"
   ],
+
   "customizations": {
     "vscode": {
       "extensions": [
@@ -30,6 +30,13 @@
       ],
       "settings": {
         "java.server.launchMode": "Standard",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-17",
+            "path": "/usr/local/sdkman/candidates/java/current",
+            "default": true
+          }
+        ],
         "spring-boot.ls.problem.application-properties.enabled": true
       }
     }
