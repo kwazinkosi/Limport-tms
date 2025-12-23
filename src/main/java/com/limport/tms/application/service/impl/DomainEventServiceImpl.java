@@ -69,6 +69,23 @@ public class DomainEventServiceImpl implements IDomainEventService {
         log.debug("Stored {} events for aggregate {} ({})", 
             outboxEvents.size(), aggregateType, aggregateId);
     }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publishToOutbox(IDomainEvent event, String aggregateType, String aggregateId) {
+        String payload = eventSerializer.serialize(event);
+        OutboxEvent outboxEvent = new OutboxEvent(
+            event.eventType(),
+            aggregateType,
+            aggregateId,
+            payload,
+            event.occurredOn()
+        );
+        outboxRepository.save(outboxEvent);
+        
+        log.debug("Stored event {} for aggregate {} ({})", 
+            event.eventType(), aggregateType, aggregateId);
+    }
     
     @Override
     @Transactional

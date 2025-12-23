@@ -2,9 +2,9 @@ package com.limport.tms.infrastructure.repository;
 
 import com.limport.tms.domain.model.entity.OutboxEvent;
 import com.limport.tms.domain.ports.IOutboxEventRepository;
-import com.limport.tms.infrastructure.repository.jpa.JpaOutboxEventRepository;
-import com.limport.tms.infrastructure.repository.jpa.OutboxEventJpaEntity;
-import org.springframework.data.domain.PageRequest;
+import com.limport.tms.infrastructure.persistance.mapper.OutboxEventEntityMapper;
+import com.limport.tms.infrastructure.repository.jpa.IOutboxEventJpaRepository;
+import com.limport.tms.infrastructure.persistance.entity.OutboxEventJpaEntity;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,23 +21,27 @@ import java.util.stream.Collectors;
 @Repository
 public class OutboxEventRepositoryAdapter implements IOutboxEventRepository {
     
-    private final JpaOutboxEventRepository jpaRepository;
+    private final IOutboxEventJpaRepository jpaRepository;
+    private final OutboxEventEntityMapper mapper;
     
-    public OutboxEventRepositoryAdapter(JpaOutboxEventRepository jpaRepository) {
+    public OutboxEventRepositoryAdapter(
+            IOutboxEventJpaRepository jpaRepository,
+            OutboxEventEntityMapper mapper) {
         this.jpaRepository = jpaRepository;
+        this.mapper = mapper;
     }
     
     @Override
     @Transactional
     public void save(OutboxEvent event) {
-        jpaRepository.save(OutboxEventJpaEntity.fromDomain(event));
+        jpaRepository.save(mapper.toJpaEntity(event));
     }
     
     @Override
     @Transactional
     public void saveAll(List<OutboxEvent> events) {
         List<OutboxEventJpaEntity> entities = events.stream()
-            .map(OutboxEventJpaEntity::fromDomain)
+            .map(mapper::toJpaEntity)
             .collect(Collectors.toList());
         jpaRepository.saveAll(entities);
     }
@@ -46,14 +50,14 @@ public class OutboxEventRepositoryAdapter implements IOutboxEventRepository {
     @Transactional(readOnly = true)
     public Optional<OutboxEvent> findById(UUID id) {
         return jpaRepository.findById(id)
-            .map(OutboxEventJpaEntity::toDomain);
+            .map(mapper::toDomain);
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<OutboxEvent> findPendingEvents(int limit) {
         return jpaRepository.findPendingEvents(limit).stream()
-            .map(OutboxEventJpaEntity::toDomain)
+            .map(mapper::toDomain)
             .collect(Collectors.toList());
     }
     
@@ -62,7 +66,7 @@ public class OutboxEventRepositoryAdapter implements IOutboxEventRepository {
     public void update(OutboxEvent event) {
         jpaRepository.findById(event.getId())
             .ifPresent(entity -> {
-                entity.updateFromDomain(event);
+                mapper.updateJpaEntity(event, entity);
                 jpaRepository.save(entity);
             });
     }

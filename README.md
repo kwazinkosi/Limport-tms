@@ -10,12 +10,23 @@ A Transport Management Service built with Spring Boot following Domain-Driven De
 
 ## Architecture
 
+Follows Clean Architecture with DDD and event-driven patterns:
+
 ```
-├── application/     # Use cases, commands, queries, DTOs
-├── domain/          # Business logic, entities, value objects, events
-├── infrastructure/  # Adapters, configs, repositories
+├── application/     # Use cases, commands, queries, DTOs, event services
+├── domain/          # Business logic, entities, value objects, domain events
+├── infrastructure/  # Adapters, configs, repositories, event publishing
 └── presentation/    # REST & GraphQL controllers
 ```
+
+### Event-Driven Architecture
+
+TMS publishes domain events via the **Outbox Pattern** for reliable asynchronous communication:
+
+- **Domain Events**: `TransportRequestCreatedEvent`, `TransportRequestUpdatedEvent`, `TransportRequestCancelledEvent`, `TransportCapacityVerifiedEvent`, `TransportRouteOptimizedEvent`
+- **Event Storage**: Transactionally stored in `outbox_events` table alongside aggregate changes
+- **Event Publishing**: Background processor polls outbox and publishes to Kafka topics
+- **Reliability**: At-least-once delivery guarantee with retry logic
 
 ## Port Configuration
 
@@ -98,3 +109,19 @@ Password: tms_password
 
 - **limport-network** (external): Connects to shared platform services (Redis, Kafka, MailHog)
 - **tms-local**: Isolated network for TMS-specific services (Postgres, Adminer)
+
+## Event Topics
+
+TMS publishes to the following Kafka topics:
+
+| Topic | Event | Description |
+|-------|-------|-------------|
+| `tms.events.request.created` | TransportRequestCreatedEvent | New transport request created |
+| `tms.events.request.updated` | TransportRequestUpdatedEvent | Request details or status updated |
+| `tms.events.request.cancelled` | TransportRequestCancelledEvent | Request cancelled by user/system |
+| `tms.events.request.assigned` | TransportRequestAssignedEvent | Request assigned to provider/vehicle |
+| `tms.events.request.completed` | TransportRequestCompletedEvent | Transport successfully completed |
+| `tms.events.capacity.verified` | TransportCapacityVerifiedEvent | Capacity check completed |
+| `tms.events.route.optimized` | TransportRouteOptimizedEvent | Optimal route determined |
+
+Events are consumed by downstream services for provider matching, route optimization, and workflow coordination.

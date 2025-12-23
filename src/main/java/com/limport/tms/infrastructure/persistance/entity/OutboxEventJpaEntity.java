@@ -1,4 +1,4 @@
-package com.limport.tms.infrastructure.repository.jpa;
+package com.limport.tms.infrastructure.persistance.entity;
 
 import com.limport.tms.domain.model.entity.OutboxEvent;
 import jakarta.persistence.*;

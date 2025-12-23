@@ -1,6 +1,7 @@
 package com.limport.tms.infrastructure.repository.jpa;
 
 import com.limport.tms.domain.model.entity.OutboxEvent;
+import com.limport.tms.infrastructure.persistance.entity.OutboxEventJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,7 +16,7 @@ import java.util.UUID;
  * Spring Data JPA repository for OutboxEvent persistence.
  */
 @Repository
-public interface JpaOutboxEventRepository extends JpaRepository<OutboxEventJpaEntity, UUID> {
+public interface IOutboxEventJpaRepository extends JpaRepository<OutboxEventJpaEntity, UUID> {
     
     @Query("SELECT o FROM OutboxEventJpaEntity o WHERE o.status = 'PENDING' ORDER BY o.occurredOn ASC")
     List<OutboxEventJpaEntity> findPendingEvents(@Param("limit") int limit);

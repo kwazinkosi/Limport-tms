@@ -1,5 +1,6 @@
 package com.limport.tms.application.service.interfaces;
 
+import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.model.aggregate.AggregateRoot;
 
 /**
@@ -16,6 +17,16 @@ public interface IDomainEventService {
      * @param aggregateType the type name of the aggregate (e.g., "TransportRequest")
      */
     void collectAndStore(AggregateRoot aggregate, String aggregateType);
+    
+    /**
+     * Publishes a single domain event directly to the outbox.
+     * Useful for events not tied to an aggregate root.
+     * 
+     * @param event the domain event to publish
+     * @param aggregateType the type of aggregate (e.g., "TransportRequest")
+     * @param aggregateId the ID of the aggregate
+     */
+    void publishToOutbox(IDomainEvent event, String aggregateType, String aggregateId);
     
     /**
      * Processes pending outbox events and publishes them to the message broker.

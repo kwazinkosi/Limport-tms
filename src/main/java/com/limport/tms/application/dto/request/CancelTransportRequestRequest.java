@@ -10,11 +10,21 @@ public class CancelTransportRequestRequest {
     @NotBlank
     private String reason;
 
+    private String cancelledBy;
+
     public String getReason() {
         return reason;
     }
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public String getCancelledBy() {
+        return cancelledBy;
+    }
+
+    public void setCancelledBy(String cancelledBy) {
+        this.cancelledBy = cancelledBy;
     }
 }

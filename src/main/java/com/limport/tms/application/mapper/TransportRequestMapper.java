@@ -4,10 +4,12 @@ import com.limport.tms.application.command.CreateTransportRequestCommand;
 import com.limport.tms.application.dto.request.CreateTransportRequest;
 import com.limport.tms.application.dto.response.TransportRequestResponse;
 import com.limport.tms.domain.model.entity.TransportRequest;
+import org.springframework.stereotype.Component;
 
 /**
  * Simple mapper between TransportRequest domain objects, commands and DTOs.
  */
+@Component
 public class TransportRequestMapper {
 
     public CreateTransportRequestCommand toCommand(CreateTransportRequest request) {
