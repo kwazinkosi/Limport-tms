@@ -5,14 +5,19 @@ import com.limport.tms.application.dto.request.CancelTransportRequestRequest;
 import com.limport.tms.application.dto.request.CreateTransportRequest;
 import com.limport.tms.application.dto.response.TransportRequestResponse;
 import com.limport.tms.application.mapper.TransportRequestMapper;
+import com.limport.tms.application.ports.IProviderMatchingClient;
 import com.limport.tms.application.service.interfaces.IDomainEventService;
 import com.limport.tms.application.service.interfaces.ITransportRequestCommandService;
 import com.limport.tms.domain.event.states.*;
+import com.limport.tms.domain.exception.InvalidStatusTransitionException;
+import com.limport.tms.domain.exception.TransportRequestNotFoundException;
 import com.limport.tms.domain.model.entity.Assignment;
 import com.limport.tms.domain.model.entity.TransportRequest;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
 import com.limport.tms.domain.ports.IAssignmentRepository;
+import com.limport.tms.domain.ports.IRouteValidator;
 import com.limport.tms.domain.ports.ITransportRequestRepository;
+import com.limport.tms.domain.service.TransportRequestStateMachine;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,16 +37,22 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
     private final IAssignmentRepository assignmentRepository;
     private final IDomainEventService eventService;
     private final TransportRequestMapper mapper;
+    private final IProviderMatchingClient pmsClient;
+    private final IRouteValidator routeValidator;
 
     public TransportRequestCommandServiceImpl(
             ITransportRequestRepository repository,
             IAssignmentRepository assignmentRepository,
             IDomainEventService eventService,
-            TransportRequestMapper mapper) {
+            TransportRequestMapper mapper,
+            IProviderMatchingClient pmsClient,
+            IRouteValidator routeValidator) {
         this.repository = repository;
         this.assignmentRepository = assignmentRepository;
         this.eventService = eventService;
         this.mapper = mapper;
+        this.pmsClient = pmsClient;
+        this.routeValidator = routeValidator;
     }
 
     @Override
@@ -92,11 +103,40 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
     @Transactional
     public TransportRequestResponse assignProvider(UUID id, AssignProviderRequest request) {
         TransportRequest transportRequest = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Transport request not found: " + id));
+                .orElseThrow(() -> new TransportRequestNotFoundException(id));
 
         // Validate state transition
-        if (transportRequest.getStatus() != TransportRequestStatus.REQUESTED) {
-            throw new IllegalStateException("Cannot assign provider to request in status: " + transportRequest.getStatus());
+        TransportRequestStateMachine.validateTransition(
+            transportRequest.getStatus(), 
+            TransportRequestStatus.PLANNED
+        );
+
+        // TMS validates route feasibility (TMS owns route optimization)
+        IRouteValidator.RouteOptimizationResult routeResult = routeValidator.optimizeRoute(
+            transportRequest.getId(),
+            transportRequest.getOriginLocationCode(),
+            transportRequest.getDestinationLocationCode()
+        );
+        
+        if (!routeResult.isFeasible()) {
+            throw new com.limport.tms.domain.exception.RouteNotFeasibleException(
+                routeResult.getMessage()
+            );
+        }
+
+        // PMS validates capacity (PMS owns provider/capacity data)
+        IProviderMatchingClient.CapacityVerificationResponse capacityResult = 
+            pmsClient.verifyCapacity(
+                request.getProviderId(),
+                transportRequest.getId(),
+                transportRequest.getTotalWeight() != null ? transportRequest.getTotalWeight().doubleValue() : 0.0
+            );
+        
+        if (!capacityResult.isSufficient()) {
+            throw new com.limport.tms.domain.exception.InsufficientCapacityException(
+                capacityResult.requiredCapacity(),
+                capacityResult.availableCapacity()
+            );
         }
 
         // Create assignment entity
@@ -137,15 +177,13 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
     @Transactional
     public TransportRequestResponse cancelTransportRequest(UUID id, CancelTransportRequestRequest request) {
         TransportRequest transportRequest = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Transport request not found: " + id));
+                .orElseThrow(() -> new TransportRequestNotFoundException(id));
 
-        // Validate state transition
-        if (transportRequest.getStatus() == TransportRequestStatus.COMPLETED) {
-            throw new IllegalStateException("Cannot cancel completed transport request");
-        }
-        if (transportRequest.getStatus() == TransportRequestStatus.CANCELLED) {
-            throw new IllegalStateException("Transport request already cancelled");
-        }
+        // Validate state transition using state machine
+        TransportRequestStateMachine.validateTransition(
+            transportRequest.getStatus(), 
+            TransportRequestStatus.CANCELLED
+        );
 
         TransportRequestStatus previousStatus = transportRequest.getStatus();
         transportRequest.setStatus(TransportRequestStatus.CANCELLED);
@@ -171,12 +209,13 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
     @Transactional
     public TransportRequestResponse completeTransportRequest(UUID id) {
         TransportRequest transportRequest = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Transport request not found: " + id));
+                .orElseThrow(() -> new TransportRequestNotFoundException(id));
 
-        // Validate state transition
-        if (transportRequest.getStatus() != TransportRequestStatus.IN_TRANSIT) {
-            throw new IllegalStateException("Can only complete requests that are in transit. Current status: " + transportRequest.getStatus());
-        }
+        // Validate state transition using state machine
+        TransportRequestStateMachine.validateTransition(
+            transportRequest.getStatus(), 
+            TransportRequestStatus.COMPLETED
+        );
 
         TransportRequestStatus previousStatus = transportRequest.getStatus();
         transportRequest.setStatus(TransportRequestStatus.COMPLETED);

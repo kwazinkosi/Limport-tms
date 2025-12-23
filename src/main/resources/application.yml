@@ -39,6 +39,12 @@ spring:
 
 # TMS specific configuration
 tms:
+  # Provider Matching Service (PMS) integration
+  pms:
+    base-url: ${PMS_BASE_URL:http://localhost:8081}
+    stub-mode: ${PMS_STUB_MODE:true}  # Set false when PMS is available
+    timeout-seconds: 10
+  
   kafka:
     topic-prefix: tms.events
   

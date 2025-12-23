@@ -1,6 +1,5 @@
 package com.limport.tms.infrastructure.persistance.entity;
 
-import com.limport.tms.domain.model.entity.TransportRequest;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
 import jakarta.persistence.*;
 import java.math.BigDecimal;

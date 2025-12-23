@@ -46,9 +46,10 @@ public class JsonEventSerializer implements IEventSerializer {
         registry.put("TransportEvents.Request.Assigned", TransportRequestAssignedEvent.class);
         registry.put("TransportEvents.Request.Completed", TransportRequestCompletedEvent.class);
         
-        // Register capacity and route events
-        registry.put("TransportEvents.Capacity.Verified", TransportCapacityVerifiedEvent.class);
+        // Register route optimization events (TMS responsibility)
         registry.put("TransportEvents.Route.Optimized", TransportRouteOptimizedEvent.class);
+        
+        // NOTE: Capacity events are published by PMS, not TMS
         
         return registry;
     }

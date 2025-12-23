@@ -23,10 +23,21 @@ Follows Clean Architecture with DDD and event-driven patterns:
 
 TMS publishes domain events via the **Outbox Pattern** for reliable asynchronous communication:
 
-- **Domain Events**: `TransportRequestCreatedEvent`, `TransportRequestUpdatedEvent`, `TransportRequestCancelledEvent`, `TransportCapacityVerifiedEvent`, `TransportRouteOptimizedEvent`
+- **Domain Events**: `TransportRequestCreatedEvent`, `TransportRequestUpdatedEvent`, `TransportRequestCancelledEvent`, `TransportRouteOptimizedEvent`
 - **Event Storage**: Transactionally stored in `outbox_events` table alongside aggregate changes
 - **Event Publishing**: Background processor polls outbox and publishes to Kafka topics
 - **Reliability**: At-least-once delivery guarantee with retry logic
+
+### External Service Integration
+
+TMS integrates with other microservices via REST APIs and event streams:
+
+- **Provider Matching Service (PMS)**: Capacity verification and provider matching
+  - `GET /api/providers/{id}/capacity` - Verify provider capacity
+  - `POST /api/providers/match` - Get provider suggestions
+  - Stub mode enabled by default (`tms.pms.stub-mode=true`)
+  
+- **Route Optimization**: Handled internally by TMS with potential future extraction to dedicated service
 
 ## Port Configuration
 
@@ -121,7 +132,8 @@ TMS publishes to the following Kafka topics:
 | `tms.events.request.cancelled` | TransportRequestCancelledEvent | Request cancelled by user/system |
 | `tms.events.request.assigned` | TransportRequestAssignedEvent | Request assigned to provider/vehicle |
 | `tms.events.request.completed` | TransportRequestCompletedEvent | Transport successfully completed |
-| `tms.events.capacity.verified` | TransportCapacityVerifiedEvent | Capacity check completed |
 | `tms.events.route.optimized` | TransportRouteOptimizedEvent | Optimal route determined |
+
+**Note**: Capacity verification events are published by PMS, not TMS.
 
 Events are consumed by downstream services for provider matching, route optimization, and workflow coordination.
