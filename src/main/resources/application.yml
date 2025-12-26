@@ -46,7 +46,18 @@ tms:
     timeout-seconds: 10
   
   kafka:
+    enabled: ${KAFKA_ENABLED:false}  # Enable when Kafka is available
     topic-prefix: tms.events
+    
+    # Consumer configuration for external events
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:tms-consumer-group}
+      auto-offset-reset: earliest
+      max-poll-records: 10
+    
+    # Topic subscriptions
+    topics:
+      pms-events: ${KAFKA_TOPIC_PMS_EVENTS:pms.events}
   
   outbox:
     enabled: true
@@ -55,6 +66,14 @@ tms:
     retention-days: 7
     cleanup-enabled: true
     cleanup-cron: "0 0 * * * *"  # Every hour
+  
+  inbox:
+    enabled: true
+    poll-interval-ms: 2000
+    batch-size: 50
+    retention-days: 7
+    cleanup-enabled: true
+    cleanup-cron: "0 30 * * * *"  # Every hour at 30 minutes past
 
 # Logging
 logging:

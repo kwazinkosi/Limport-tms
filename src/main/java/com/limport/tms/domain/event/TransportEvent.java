@@ -32,7 +32,7 @@ public abstract class TransportEvent extends BaseEvent {
 
     @Override
     public String eventType() {
-        return "TransportEvents." + eventCategory() + "." + eventName();
+        return "TMS.Transport." + eventCategory() + "." + eventName();
     }
 
     /**

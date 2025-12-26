@@ -12,6 +12,8 @@ services:
   #   depends_on:
   #     tms-postgres:
   #       condition: service_healthy
+  #     tms-redis:
+  #       condition: service_healthy
   #   networks:
   #     - limport-network  # Connect to shared infrastructure
   #     - tms-local        # Connect to local services
@@ -20,7 +22,8 @@ services:
   #   environment:
   #     SPRING_PROFILES_ACTIVE: docker
   #     SPRING_DATASOURCE_URL: jdbc:postgresql://tms-postgres:5432/tms_db
-  #     SPRING_REDIS_HOST: redis  # From shared network
+  #     REDIS_HOST: tms-redis
+  #     EVENT_TRACKER_TYPE: redis  # Use Redis for production idempotency
   #     SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092  # From shared network
 
   # TMS Database (dedicated)
@@ -43,6 +46,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # TMS Redis (for event idempotency tracking and caching)
+  tms-redis:
+    image: redis:7-alpine
+    container_name: limport-tms-redis
+    networks:
+      - tms-local
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    volumes:
+      - tms-redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # TMS Database Admin (optional)
   tms-adminer:
     image: adminer
@@ -59,3 +79,4 @@ services:
 
 volumes:
   tms-postgres-data:
+  tms-redis-data:

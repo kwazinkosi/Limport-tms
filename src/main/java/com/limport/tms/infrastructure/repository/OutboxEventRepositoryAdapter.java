@@ -5,6 +5,7 @@ import com.limport.tms.domain.ports.IOutboxEventRepository;
 import com.limport.tms.infrastructure.persistance.mapper.OutboxEventEntityMapper;
 import com.limport.tms.infrastructure.repository.jpa.IOutboxEventJpaRepository;
 import com.limport.tms.infrastructure.persistance.entity.OutboxEventJpaEntity;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +57,7 @@ public class OutboxEventRepositoryAdapter implements IOutboxEventRepository {
     @Override
     @Transactional(readOnly = true)
     public List<OutboxEvent> findPendingEvents(int limit) {
-        return jpaRepository.findPendingEvents(limit).stream()
+        return jpaRepository.findPendingEvents(PageRequest.of(0, limit)).stream()
             .map(mapper::toDomain)
             .collect(Collectors.toList());
     }

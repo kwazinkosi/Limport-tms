@@ -1,10 +1,7 @@
 package com.limport.tms.infrastructure.event;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.limport.tms.application.service.interfaces.IEventSerializer;
 import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.event.states.*;
@@ -23,17 +20,9 @@ public class JsonEventSerializer implements IEventSerializer {
     private final ObjectMapper objectMapper;
     private final Map<String, Class<? extends IDomainEvent>> eventTypeRegistry;
     
-    public JsonEventSerializer() {
-        this.objectMapper = createObjectMapper();
+    public JsonEventSerializer(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         this.eventTypeRegistry = createEventTypeRegistry();
-    }
-    
-    private ObjectMapper createObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        return mapper;
     }
     
     private Map<String, Class<? extends IDomainEvent>> createEventTypeRegistry() {

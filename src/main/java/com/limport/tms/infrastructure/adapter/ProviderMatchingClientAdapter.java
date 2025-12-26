@@ -4,6 +4,7 @@ import com.limport.tms.application.ports.IProviderMatchingClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -24,14 +25,12 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
     private static final Logger log = LoggerFactory.getLogger(ProviderMatchingClientAdapter.class);
     
     private final RestClient restClient;
-    private final String pmsBaseUrl;
     private final boolean stubMode;
 
     public ProviderMatchingClientAdapter(
             RestClient.Builder restClientBuilder,
             @Value("${tms.pms.base-url:http://localhost:8081}") String pmsBaseUrl,
             @Value("${tms.pms.stub-mode:true}") boolean stubMode) {
-        this.pmsBaseUrl = pmsBaseUrl;
         this.stubMode = stubMode;
         this.restClient = restClientBuilder.baseUrl(pmsBaseUrl).build();
         
@@ -98,7 +97,7 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
                 .uri("/api/providers/match")
                 .body(request)
                 .retrieve()
-                .body(List.class);
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
             
             return response.stream()
                 .map(this::mapToProviderMatchResponse)

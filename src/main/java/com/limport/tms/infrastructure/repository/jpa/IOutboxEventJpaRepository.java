@@ -1,7 +1,7 @@
 package com.limport.tms.infrastructure.repository.jpa;
 
-import com.limport.tms.domain.model.entity.OutboxEvent;
 import com.limport.tms.infrastructure.persistance.entity.OutboxEventJpaEntity;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,8 +18,12 @@ import java.util.UUID;
 @Repository
 public interface IOutboxEventJpaRepository extends JpaRepository<OutboxEventJpaEntity, UUID> {
     
+    /**
+     * Find pending outbox events ordered by occurrence time.
+     * Uses Pageable to properly limit results.
+     */
     @Query("SELECT o FROM OutboxEventJpaEntity o WHERE o.status = 'PENDING' ORDER BY o.occurredOn ASC")
-    List<OutboxEventJpaEntity> findPendingEvents(@Param("limit") int limit);
+    List<OutboxEventJpaEntity> findPendingEvents(Pageable pageable);
     
     @Modifying
     @Query("DELETE FROM OutboxEventJpaEntity o WHERE o.status = 'PROCESSED' AND o.processedAt < :before")

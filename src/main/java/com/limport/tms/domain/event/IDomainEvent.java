@@ -20,7 +20,25 @@ public interface IDomainEvent {
     Instant occurredOn();
     
     /**
-     * Fully qualified event type name (e.g., "TransportEvents.Request.Created").
+     * Version of the event schema.
+     * Used for backward compatibility during schema evolution.
+     */
+    int getVersion();
+    
+    /**
+     * Correlation ID for distributed tracing.
+     * Links related events across service boundaries.
+     */
+    String getCorrelationId();
+    
+    /**
+     * Causation ID for distributed tracing.
+     * Identifies the event that caused this event.
+     */
+    String getCausationId();
+    
+    /**
+     * Fully qualified event type name (e.g., "TMS.Transport.Request.Created").
      */
     String eventType();
 }

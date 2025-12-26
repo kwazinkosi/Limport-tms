@@ -1,7 +1,8 @@
 package com.limport.tms.infrastructure.event.listener;
 
-import com.limport.tms.application.service.interfaces.IEventSerializer;
-import com.limport.tms.domain.event.IDomainEvent;
+import com.limport.tms.application.service.interfaces.ITransportEventService;
+import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
+import com.limport.tms.domain.event.EventTypes;
 import com.limport.tms.domain.event.states.TransportRequestAssignedEvent;
 import com.limport.tms.domain.event.states.TransportRequestCreatedEvent;
 import org.slf4j.Logger;
@@ -21,10 +22,14 @@ public class TransportEventListener {
     
     private static final Logger log = LoggerFactory.getLogger(TransportEventListener.class);
     
-    private final IEventSerializer eventSerializer;
+    private final IUnifiedEventSerializer eventSerializer;
+    private final ITransportEventService transportEventService;
     
-    public TransportEventListener(IEventSerializer eventSerializer) {
+    public TransportEventListener(
+            IUnifiedEventSerializer eventSerializer,
+            ITransportEventService transportEventService) {
         this.eventSerializer = eventSerializer;
+        this.transportEventService = transportEventService;
     }
     
     /**
@@ -42,17 +47,10 @@ public class TransportEventListener {
         
         try {
             TransportRequestCreatedEvent event = (TransportRequestCreatedEvent) 
-                eventSerializer.deserialize(payload, "TransportEvents.Request.Created");
+                eventSerializer.deserialize(payload, EventTypes.Transport.Request.CREATED);
             
-            log.info("Received TransportRequestCreated: id={}, origin={}, destination={}",
-                event.getTransportRequestId(),
-                event.getOrigin(),
-                event.getDestination());
-            
-            // Trigger downstream processes:
-            // - Capacity verification
-            // - Route optimization
-            // - Provider matching
+            // Delegate business logic to application service
+            transportEventService.handleTransportRequestCreated(event);
             
         } catch (Exception e) {
             log.error("Failed to process request created event: {}", e.getMessage(), e);
@@ -74,17 +72,10 @@ public class TransportEventListener {
         
         try {
             TransportRequestAssignedEvent event = (TransportRequestAssignedEvent) 
-                eventSerializer.deserialize(payload, "TransportEvents.Request.Assigned");
+                eventSerializer.deserialize(payload, EventTypes.Transport.Request.ASSIGNED);
             
-            log.info("Received TransportRequestAssigned: requestId={}, providerId={}, vehicleId={}",
-                event.getTransportRequestId(),
-                event.getProviderId(),
-                event.getVehicleId());
-            
-            // Trigger downstream processes:
-            // - Notify provider
-            // - Update scheduling system
-            // - Send customer notification
+            // Delegate business logic to application service
+            transportEventService.handleTransportRequestAssigned(event);
             
         } catch (Exception e) {
             log.error("Failed to process request assigned event: {}", e.getMessage(), e);

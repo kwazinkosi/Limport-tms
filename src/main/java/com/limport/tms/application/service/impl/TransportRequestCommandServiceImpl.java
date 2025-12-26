@@ -9,7 +9,6 @@ import com.limport.tms.application.ports.IProviderMatchingClient;
 import com.limport.tms.application.service.interfaces.IDomainEventService;
 import com.limport.tms.application.service.interfaces.ITransportRequestCommandService;
 import com.limport.tms.domain.event.states.*;
-import com.limport.tms.domain.exception.InvalidStatusTransitionException;
 import com.limport.tms.domain.exception.TransportRequestNotFoundException;
 import com.limport.tms.domain.model.entity.Assignment;
 import com.limport.tms.domain.model.entity.TransportRequest;
