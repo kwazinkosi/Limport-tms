@@ -22,8 +22,7 @@ public class OutboxEventProcessor {
     private final IOutboxEventRepository outboxRepository;
     private final EventProcessingMetrics metrics;
     
-    @Value("${tms.outbox.batch-size:100}")
-    private int batchSize;
+    private final EventProcessingProperties eventProcessingProperties;
     
     @Value("${tms.outbox.enabled:true}")
     private boolean enabled;
@@ -31,23 +30,26 @@ public class OutboxEventProcessor {
     public OutboxEventProcessor(
             IOutboxEventProcessor outboxEventProcessor,
             IOutboxEventRepository outboxRepository,
-            EventProcessingMetrics metrics) {
+            EventProcessingMetrics metrics,
+            EventProcessingProperties eventProcessingProperties) {
         this.outboxEventProcessor = outboxEventProcessor;
         this.outboxRepository = outboxRepository;
         this.metrics = metrics;
+        this.eventProcessingProperties = eventProcessingProperties;
     }
     
     /**
      * Polls the outbox and publishes pending events.
      * Runs every second by default (configurable).
      */
-    @Scheduled(fixedDelayString = "${tms.outbox.poll-interval-ms:1000}")
+    @Scheduled(fixedDelayString = "#{@eventProcessingProperties.getOutboxPollIntervalMs()}")
     public void processOutbox() {
         if (!enabled) {
             return;
         }
         
         try {
+            int batchSize = eventProcessingProperties.getOutboxBatchSize();
             int processed = outboxEventProcessor.processPendingEvents(batchSize);
             if (processed > 0) {
                 log.debug("Outbox processor published {} events", processed);

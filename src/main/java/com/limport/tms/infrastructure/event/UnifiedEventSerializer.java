@@ -125,8 +125,9 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
             if (version < currentVersion) {
                 log.debug("Deserializing event {} with older version {} (current: {})", 
                     eventType, version, currentVersion);
-                // TODO: Implement version migration logic here
-                // For now, attempt direct deserialization and let Jackson handle compatibility
+                
+                // Apply version migration
+                jsonNode = (ObjectNode) migrateEvent((ObjectNode) jsonNode, eventType, version, currentVersion);
             }
             
             // Remove wrapper fields before deserializing
@@ -154,9 +155,62 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
      * This should be maintained as events evolve.
      */
     private int getCurrentVersion(String eventType) {
-        // TODO: This could be moved to a configuration or registry
-        // For now, return 1 as default. Specific event types can override.
-        return 1;
+        return eventVersionRegistry.getOrDefault(eventType, 1);
+    }
+
+    /**
+     * Registry of current versions for event types.
+     * Update this as event schemas evolve.
+     */
+    private final Map<String, Integer> eventVersionRegistry = Map.of(
+        EventTypes.Transport.Request.CREATED, 1,
+        EventTypes.Transport.Request.UPDATED, 1,
+        EventTypes.Transport.Request.CANCELLED, 1,
+        EventTypes.Transport.Request.ASSIGNED, 1,
+        EventTypes.Transport.Request.COMPLETED, 1,
+        EventTypes.Transport.Route.OPTIMIZED, 1
+    );
+
+    /**
+     * Migrates an event from an older version to the current version.
+     * This method should be updated as new versions are introduced.
+     */
+    private ObjectNode migrateEvent(ObjectNode eventNode, String eventType, int fromVersion, int toVersion) {
+        ObjectNode migratedNode = eventNode.deepCopy();
+        
+        // Apply migrations step by step
+        for (int version = fromVersion + 1; version <= toVersion; version++) {
+            migratedNode = applyMigration(migratedNode, eventType, version);
+        }
+        
+        return migratedNode;
+    }
+
+    /**
+     * Applies a specific version migration.
+     * Add new migration logic here as versions evolve.
+     */
+    private ObjectNode applyMigration(ObjectNode eventNode, String eventType, int targetVersion) {
+        // Example migration patterns:
+        // - Add new required fields with defaults
+        // - Rename fields
+        // - Transform field values
+        // - Remove deprecated fields
+        
+        switch (targetVersion) {
+            case 2:
+                // Example: Add new field with default value
+                if (!eventNode.has("newRequiredField")) {
+                    eventNode.put("newRequiredField", "defaultValue");
+                }
+                break;
+                
+            // Add more version cases as needed
+            default:
+                log.warn("No migration logic defined for version {} of event type {}", targetVersion, eventType);
+        }
+        
+        return eventNode;
     }
 
     @Override

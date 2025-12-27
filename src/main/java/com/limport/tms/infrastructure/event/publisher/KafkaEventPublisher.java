@@ -1,10 +1,12 @@
 package com.limport.tms.infrastructure.event.publisher;
 
-import com.limport.tms.application.service.interfaces.IEventSerializer;
+import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
+import com.limport.tms.domain.event.CorrelationIdContext;
 import com.limport.tms.domain.event.IDomainEvent;
+import com.limport.tms.infrastructure.event.EventProcessingMetrics;
+
 import com.limport.tms.domain.event.TransportEvent;
 import com.limport.tms.domain.ports.IEventPublisher;
-import com.limport.tms.infrastructure.event.EventProcessingMetrics;
 import io.micrometer.core.instrument.Timer;
 
 import org.slf4j.Logger;
@@ -36,7 +38,7 @@ public class KafkaEventPublisher implements IEventPublisher {
     private static final int SEND_TIMEOUT_SECONDS = 10;
     
     private final KafkaTemplate<String, String> kafkaTemplate;
-    private final IEventSerializer eventSerializer;
+    private final IUnifiedEventSerializer eventSerializer;
     private final EventProcessingMetrics metrics;
     
     @Value("${tms.kafka.publish.timeout-seconds:5}")
@@ -76,7 +78,7 @@ public class KafkaEventPublisher implements IEventPublisher {
     
     public KafkaEventPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
-            IEventSerializer eventSerializer,
+            IUnifiedEventSerializer eventSerializer,
             EventProcessingMetrics metrics) {
         this.kafkaTemplate = kafkaTemplate;
         this.eventSerializer = eventSerializer;
@@ -130,6 +132,8 @@ public class KafkaEventPublisher implements IEventPublisher {
     /**
      * Publishes an event asynchronously with callback for outbox processing.
      * Returns a CompletableFuture that completes when publishing is done.
+     * 
+     * ThreadLocal cleanup is performed in async handlers to prevent memory leaks.
      */
     public CompletableFuture<Void> publishAsync(IDomainEvent event) {
         String topic = buildTopic(event);
@@ -138,6 +142,8 @@ public class KafkaEventPublisher implements IEventPublisher {
 
         return kafkaTemplate.send(topic, key, payload)
             .thenAccept(result -> {
+                // Clear ThreadLocal to prevent memory leaks in async processing
+                CorrelationIdContext.clear();
                 log.debug("Published event {} to topic {} partition {} offset {}",
                     event.eventType(),
                     topic,
@@ -145,6 +151,8 @@ public class KafkaEventPublisher implements IEventPublisher {
                     result.getRecordMetadata().offset());
             })
             .exceptionally(throwable -> {
+                // Clear ThreadLocal to prevent memory leaks in async processing
+                CorrelationIdContext.clear();
                 log.error("Failed to publish event {} to topic {}: {}",
                     event.eventType(), topic, throwable.getMessage());
                 throw new RuntimeException("Kafka publish failed: " + throwable.getMessage(), throwable);

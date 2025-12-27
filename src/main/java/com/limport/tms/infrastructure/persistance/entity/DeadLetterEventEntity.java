@@ -42,6 +42,12 @@ public class DeadLetterEventEntity {
     @Column(name = "next_retry_at")
     private Instant nextRetryAt;
 
+    @Column(name = "quarantined_at")
+    private Instant quarantinedAt;
+
+    @Column(name = "quarantine_reason", columnDefinition = "TEXT")
+    private String quarantineReason;
+
     @Column(name = "processed_at")
     private Instant processedAt;
 
@@ -73,7 +79,8 @@ public class DeadLetterEventEntity {
     public Instant getFirstFailedAt() { return firstFailedAt; }
     public Instant getLastFailedAt() { return lastFailedAt; }
     public Instant getNextRetryAt() { return nextRetryAt; }
-    public Instant getProcessedAt() { return processedAt; }
+    public Instant getQuarantinedAt() { return quarantinedAt; }
+    public String getQuarantineReason() { return quarantineReason; }
 
     // Business methods
     public void incrementFailureCount() {
@@ -89,11 +96,21 @@ public class DeadLetterEventEntity {
         this.processedAt = Instant.now();
     }
 
+    public void quarantine(String reason) {
+        this.quarantinedAt = Instant.now();
+        this.quarantineReason = reason;
+        this.nextRetryAt = null; // Stop retries
+    }
+
+    public boolean isQuarantined() {
+        return quarantinedAt != null;
+    }
+
     public boolean isExpired(int maxRetries) {
         return failureCount >= maxRetries;
     }
 
     public boolean isReadyForRetry() {
-        return nextRetryAt != null && Instant.now().isAfter(nextRetryAt);
+        return nextRetryAt != null && Instant.now().isAfter(nextRetryAt) && !isQuarantined();
     }
 }

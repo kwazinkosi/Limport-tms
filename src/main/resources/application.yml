@@ -61,19 +61,26 @@ tms:
   
   outbox:
     enabled: true
-    poll-interval-ms: 1000
-    batch-size: 100
     retention-days: 7
     cleanup-enabled: true
     cleanup-cron: "0 0 * * * *"  # Every hour
   
   inbox:
     enabled: true
-    poll-interval-ms: 2000
-    batch-size: 50
     retention-days: 7
     cleanup-enabled: true
     cleanup-cron: "0 30 * * * *"  # Every hour at 30 minutes past
+
+  # Consolidated event processing configuration
+  event-processing:
+    poll-interval-ms: 1000  # Default poll interval
+    batch-size: 50          # Default batch size
+    outbox:
+      poll-interval-ms: 1000  # Override for outbox
+      batch-size: 100         # Override for outbox
+    inbox:
+      poll-interval-ms: 2000  # Override for inbox
+      batch-size: 50          # Override for inbox
 
 # Logging
 logging:

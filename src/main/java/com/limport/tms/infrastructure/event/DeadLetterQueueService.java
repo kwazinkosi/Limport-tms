@@ -36,6 +36,9 @@ public class DeadLetterQueueService implements IDeadLetterService {
     @Value("${tms.deadletter.max-retries:5}")
     private int maxRetries;
 
+    @Value("${tms.deadletter.quarantine-threshold:3}")
+    private int quarantineThreshold;
+
     @Value("${tms.deadletter.initial-retry-delay-ms:1000}")
     private long initialRetryDelayMs;
 
@@ -82,7 +85,10 @@ public class DeadLetterQueueService implements IDeadLetterService {
 
         event.incrementFailureCount();
 
-        if (!event.isExpired(maxRetries)) {
+        // Check if event should be quarantined (consistently failing)
+        if (shouldQuarantine(event)) {
+            quarantineEvent(event, failureReason);
+        } else if (!event.isExpired(maxRetries)) {
             Instant nextRetryAt = calculateNextRetryTime(event.getFailureCount());
             event.scheduleNextRetry(nextRetryAt);
             log.warn("Updated dead letter event {} failure count to {}. Next retry at: {}",
@@ -119,6 +125,12 @@ public class DeadLetterQueueService implements IDeadLetterService {
             .findEventsReadyForRetry(Instant.now());
 
         for (DeadLetterEventEntity event : readyEvents) {
+            // Skip quarantined events
+            if (event.isQuarantined()) {
+                log.debug("Skipping quarantined event {}", event.getEventId());
+                continue;
+            }
+
             try {
                 // Use circuit breaker to attempt retry
                 circuitBreaker.execute("dead-letter-retry-" + event.getSource(), () -> {
@@ -195,12 +207,32 @@ public class DeadLetterQueueService implements IDeadLetterService {
     }
 
     /**
-     * Calculates next retry time using exponential backoff.
+     * Calculates the next retry time using exponential backoff.
      */
     private Instant calculateNextRetryTime(int failureCount) {
-        long delayMs = initialRetryDelayMs * (long) Math.pow(2, failureCount - 1);
+        // Exponential backoff: initialDelay * 2^(failureCount-1)
+        long delayMs = initialRetryDelayMs * (1L << (failureCount - 1));
+        // Cap at max retry delay
         delayMs = Math.min(delayMs, maxRetryDelayMs);
         return Instant.now().plusMillis(delayMs);
+    }
+
+    /**
+     * Determines if an event should be quarantined based on failure patterns.
+     * Currently uses consecutive failure count, but could be enhanced with
+     * time-based analysis or failure rate patterns.
+     */
+    private boolean shouldQuarantine(DeadLetterEventEntity event) {
+        return event.getFailureCount() >= quarantineThreshold;
+    }
+
+    /**
+     * Quarantines an event by marking it as permanently failed and preventing further retries.
+     */
+    private void quarantineEvent(DeadLetterEventEntity event, String failureReason) {
+        event.quarantine(failureReason);
+        log.error("Quarantined poison pill event {} after {} consecutive failures. Reason: {}",
+            event.getEventId(), event.getFailureCount(), failureReason);
     }
 
     /**

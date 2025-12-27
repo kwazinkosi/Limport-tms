@@ -7,6 +7,7 @@ import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import com.limport.tms.domain.event.CorrelationIdContext;
 import com.limport.tms.infrastructure.event.DeadLetterQueueService;
 import com.limport.tms.infrastructure.event.EventProcessingMetrics;
+import com.limport.tms.infrastructure.event.EventProcessingProperties;
 import com.limport.tms.infrastructure.event.UnifiedEventProcessor;
 import com.limport.tms.infrastructure.persistance.entity.ExternalEventInboxEntity;
 import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
@@ -15,7 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -36,9 +36,7 @@ public class ExternalEventInboxProcessor extends UnifiedEventProcessor<ExternalE
     private final IUnifiedEventSerializer eventSerializer;
     private final ExternalEventHandlerRegistry handlerRegistry;
     private final IProcessedEventTracker processedEventTracker;
-
-    @Value("${tms.inbox.batch-size:50}")
-    private int batchSize;
+    private final EventProcessingProperties eventProcessingProperties;
 
     @Value("${tms.inbox.enabled:true}")
     private boolean enabled;
@@ -50,24 +48,27 @@ public class ExternalEventInboxProcessor extends UnifiedEventProcessor<ExternalE
             IProcessedEventTracker processedEventTracker,
             DeadLetterQueueService deadLetterQueueService,
             EventProcessingMetrics metrics,
+            EventProcessingProperties eventProcessingProperties,
             @Value("${tms.eventprocessor.max-consecutive-failures:3}") int maxConsecutiveFailures) {
         super(log, metrics, deadLetterQueueService, maxConsecutiveFailures);
         this.inboxRepository = inboxRepository;
         this.eventSerializer = eventSerializer;
         this.handlerRegistry = handlerRegistry;
         this.processedEventTracker = processedEventTracker;
+        this.eventProcessingProperties = eventProcessingProperties;
     }
 
     /**
      * Processes pending external events from the inbox.
      * Runs every 2 seconds by default.
      */
-    @Scheduled(fixedDelayString = "${tms.inbox.poll-interval-ms:2000}")
+    @Scheduled(fixedDelayString = "#{@eventProcessingProperties.getInboxPollIntervalMs()}")
     public void processInbox() {
         if (!enabled) {
             return;
         }
 
+        int batchSize = eventProcessingProperties.getInboxBatchSize();
         int processed = processPendingEvents(batchSize);
         
         // Update queue size metrics
