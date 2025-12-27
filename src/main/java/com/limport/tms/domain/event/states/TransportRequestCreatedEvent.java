@@ -10,7 +10,7 @@ import java.util.UUID;
  * This event includes all relevant details of the request and is consumed by
  * services involved in provider matching and route optimization.
  * 
- * Event Type: TransportEvents.Request.Created
+ * Event Type: TMS.Transport.Request.Created
  */
 public final class TransportRequestCreatedEvent extends TransportStatusChangedEvent {
 

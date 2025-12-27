@@ -3,16 +3,22 @@ package com.limport.tms.application.eventhandler;
 import com.limport.tms.application.event.IExternalEventHandler;
 import com.limport.tms.application.event.pms.ProviderAssignmentResponseEvent;
 import com.limport.tms.application.event.pms.ProviderAssignmentResponseEvent.AssignmentResponse;
+import com.limport.tms.domain.event.EventTypes.Provider;
 import com.limport.tms.domain.model.entity.Assignment;
 import com.limport.tms.domain.model.entity.Assignment.AssignmentStatus;
+import com.limport.tms.domain.model.entity.TransportRequest;
+import com.limport.tms.domain.model.enums.TransportRequestStatus;
 import com.limport.tms.domain.ports.IAssignmentRepository;
 import com.limport.tms.domain.ports.ITransportRequestRepository;
+import com.limport.tms.application.service.interfaces.IDomainEventService;
+import com.limport.tms.domain.event.states.TransportRequestReMatchingTriggeredEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Handles ProviderAssignmentResponseEvent from PMS.
@@ -27,14 +33,20 @@ public class ProviderAssignmentResponseEventHandler implements IExternalEventHan
     
     private static final Logger log = LoggerFactory.getLogger(ProviderAssignmentResponseEventHandler.class);
     
+    /** Maximum number of assignment attempts before marking request as unassignable. */
+    private static final int MAX_ASSIGNMENT_ATTEMPTS = 3;
+    
     private final IAssignmentRepository assignmentRepository;
     private final ITransportRequestRepository transportRequestRepository;
+    private final IDomainEventService domainEventService;
     
     public ProviderAssignmentResponseEventHandler(
             IAssignmentRepository assignmentRepository,
-            ITransportRequestRepository transportRequestRepository) {
+            ITransportRequestRepository transportRequestRepository,
+            IDomainEventService domainEventService) {
         this.assignmentRepository = assignmentRepository;
         this.transportRequestRepository = transportRequestRepository;
+        this.domainEventService = domainEventService;
     }
     
     @Override
@@ -94,8 +106,8 @@ public class ProviderAssignmentResponseEventHandler implements IExternalEventHan
         assignment.setStatus(AssignmentStatus.CANCELLED);
         assignmentRepository.save(assignment);
         
-        // TODO: Trigger re-matching logic or notify operations team
-        // This could involve calling PMS again or updating transport request status
+        // Handle re-matching with retry limit
+        handleReMatchingWithRetryLimit(event.transportRequestId(), "rejection", event.assignmentId(), event.providerId(), event.providerName(), event.responseReason());
         
         log.info("Assignment {} cancelled due to provider rejection", event.assignmentId());
     }
@@ -110,69 +122,65 @@ public class ProviderAssignmentResponseEventHandler implements IExternalEventHan
         assignment.setStatus(AssignmentStatus.CANCELLED);
         assignmentRepository.save(assignment);
         
-        // TODO: Trigger re-matching logic or notify operations team
-        // Similar to rejection handling
+        // Handle re-matching with retry limit
+        handleReMatchingWithRetryLimit(event.transportRequestId(), "timeout", event.assignmentId(), event.providerId(), event.providerName(), null);
         
         log.info("Assignment {} cancelled due to provider timeout", event.assignmentId());
     }
     
-    @Override
-    public String getSupportedEventType() {
-        return com.limport.tms.domain.event.EventTypes.Provider.ASSIGNMENT_RESPONSE;
-    }
-    
-    @Override
-    public Class<ProviderAssignmentResponseEvent> getEventClass() {
-        return ProviderAssignmentResponseEvent.class;
-    }
-}
-        // 3. Publish TransportEvents.Request.ProviderConfirmed
+    /**
+     * Handles re-matching logic with a retry limit.
+     * If max attempts exceeded, marks the transport request as UNASSIGNABLE.
+     * 
+     * @param transportRequestId the transport request to re-match
+     * @param reason the reason for re-matching (rejection/timeout)
+     * @param previousAssignmentId the ID of the failed assignment
+     * @param previousProviderId the ID of the provider that failed
+     * @param providerName the name of the provider that failed
+     * @param rejectionReason the reason for rejection (null for timeout)
+     */
+    private void handleReMatchingWithRetryLimit(UUID transportRequestId, String reason, UUID previousAssignmentId, UUID previousProviderId, String providerName, String rejectionReason) {
+        Optional<TransportRequest> transportRequestOpt = transportRequestRepository.findById(transportRequestId);
+        if (transportRequestOpt.isEmpty()) {
+            log.warn("Transport request {} not found when handling {}", transportRequestId, reason);
+            return;
+        }
         
-        // TODO: Implement when services are wired
-        // assignmentRepository.updateStatus(event.assignmentId(), AssignmentStatus.CONFIRMED);
-        // commandService.confirmAssignment(event.transportRequestId(), event.assignmentId());
-    }
-    
-    private void handleRejected(ProviderAssignmentResponseEvent event) {
-        log.warn("Provider {} rejected assignment {} for transport request {}. Reason: {}",
-            event.providerName(),
-            event.assignmentId(),
-            event.transportRequestId(),
-            event.responseReason());
+        TransportRequest transportRequest = transportRequestOpt.get();
+        int attempts = transportRequest.incrementAssignmentAttempts();
         
-        // Business Logic:
-        // 1. Update assignment status to REJECTED
-        // 2. Find alternative providers or revert status
-        // 3. Notify user of rejection
-        
-        // TODO: Implement rejection handling
-        // assignmentRepository.updateStatus(event.assignmentId(), AssignmentStatus.REJECTED);
-        // 
-        // If there are other pending assignments for this request:
-        //   - Auto-assign to next best provider
-        // Else:
-        //   - Revert request to REQUESTED status
-        //   - Trigger new provider matching
-    }
-    
-    private void handleTimeout(ProviderAssignmentResponseEvent event) {
-        log.warn("Provider {} did not respond to assignment {} for transport request {} within timeout",
-            event.providerName(),
-            event.assignmentId(),
-            event.transportRequestId());
-        
-        // Business Logic:
-        // 1. Update assignment status to TIMED_OUT
-        // 2. Auto-assign to next provider or alert user
-        // 3. Consider marking provider as less reliable
-        
-        // TODO: Implement timeout handling
-        // Similar to rejection but may have different retry logic
+        if (attempts >= MAX_ASSIGNMENT_ATTEMPTS) {
+            // Max retries exceeded - mark as unassignable for manual intervention
+            transportRequest.setStatus(TransportRequestStatus.UNASSIGNABLE);
+            transportRequestRepository.save(transportRequest);
+            log.warn("Transport request {} marked as UNASSIGNABLE after {} failed assignment attempts. Manual intervention required.",
+                transportRequestId, attempts);
+        } else {
+            // Set back to REQUESTED for another matching attempt
+            transportRequest.setStatus(TransportRequestStatus.REQUESTED);
+            transportRequestRepository.save(transportRequest);
+            
+            // Publish event to trigger re-matching
+            TransportRequestReMatchingTriggeredEvent reMatchingEvent = new TransportRequestReMatchingTriggeredEvent(
+                transportRequestId,
+                null, // userId - could be extracted from transport request if needed
+                previousAssignmentId,
+                previousProviderId,
+                providerName,
+                reason.equals("rejection") ? rejectionReason : null,
+                attempts,
+                MAX_ASSIGNMENT_ATTEMPTS
+            );
+            domainEventService.publishToOutbox(reMatchingEvent, "TransportRequest", transportRequestId.toString());
+            
+            log.info("Transport request {} set back to REQUESTED for re-matching after provider {} (attempt {}/{})",
+                transportRequestId, reason, attempts, MAX_ASSIGNMENT_ATTEMPTS);
+        }
     }
     
     @Override
     public String getSupportedEventType() {
-        return com.limport.tms.domain.event.EventTypes.Provider.ASSIGNMENT_RESPONSE;
+        return Provider.ASSIGNMENT_RESPONSE;
     }
     
     @Override

@@ -9,7 +9,7 @@ import java.util.UUID;
  * Published when a transport request is cancelled.
  * This event allows downstream services to cease any processing related to that request.
  * 
- * Event Type: TransportEvents.Request.Cancelled
+ * Event Type: TMS.Transport.Request.Cancelled
  */
 public final class TransportRequestCancelledEvent extends TransportStatusChangedEvent {
 

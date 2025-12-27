@@ -9,7 +9,7 @@ import java.util.UUID;
  * Published when a transport request is successfully completed.
  * This marks the end of the transport lifecycle.
  * 
- * Event Type: TransportEvents.Request.Completed
+ * Event Type: TMS.Transport.Request.Completed
  */
 public final class TransportRequestCompletedEvent extends TransportStatusChangedEvent {
 

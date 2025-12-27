@@ -18,5 +18,8 @@ public enum TransportRequestStatus {
     COMPLETED,
 
     /** Request was cancelled before completion. */
-    CANCELLED
+    CANCELLED,
+
+    /** No provider could be assigned after maximum retry attempts. Requires manual intervention. */
+    UNASSIGNABLE
 }

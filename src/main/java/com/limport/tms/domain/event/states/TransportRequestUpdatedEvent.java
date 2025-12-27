@@ -10,7 +10,7 @@ import java.util.UUID;
  * such as changes in status or item details.
  * Other services can use this information to react appropriately to the request's current state.
  * 
- * Event Type: TransportEvents.Request.Updated
+ * Event Type: TMS.Transport.Request.Updated
  */
 public final class TransportRequestUpdatedEvent extends TransportStatusChangedEvent {
 

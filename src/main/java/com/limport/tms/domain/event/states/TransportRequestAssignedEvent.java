@@ -8,7 +8,7 @@ import java.util.UUID;
  * Published when a transport request is assigned to a provider/vehicle.
  * This event indicates that planning is complete and the request is ready for execution.
  * 
- * Event Type: TransportEvents.Request.Assigned
+ * Event Type: TMS.Transport.Request.Assigned
  */
 public final class TransportRequestAssignedEvent extends TransportStatusChangedEvent {
 

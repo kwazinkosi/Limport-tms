@@ -10,7 +10,7 @@ import java.util.UUID;
  * Published when an optimal route for a transport request has been determined.
  * Provides crucial information for delivery planning and coordination.
  * 
- * Event Type: TransportEvents.Route.Optimized
+ * Event Type: TMS.Transport.Route.Optimized
  */
 public final class TransportRouteOptimizedEvent extends TransportEvent {
 

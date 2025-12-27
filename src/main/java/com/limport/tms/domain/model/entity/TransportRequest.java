@@ -31,6 +31,9 @@ public class TransportRequest {
 
     private TransportRequestStatus status;
 
+    /** Number of times assignment has been attempted and rejected/timed out. */
+    private int assignmentAttempts;
+
     private Instant createdAt;
     private Instant lastUpdatedAt;
 
@@ -144,5 +147,21 @@ public class TransportRequest {
 
     public void setLastUpdatedAt(Instant lastUpdatedAt) {
         this.lastUpdatedAt = lastUpdatedAt;
+    }
+
+    public int getAssignmentAttempts() {
+        return assignmentAttempts;
+    }
+
+    public void setAssignmentAttempts(int assignmentAttempts) {
+        this.assignmentAttempts = assignmentAttempts;
+    }
+
+    /**
+     * Increments the assignment attempt counter.
+     * @return the new attempt count
+     */
+    public int incrementAssignmentAttempts() {
+        return ++this.assignmentAttempts;
     }
 }
