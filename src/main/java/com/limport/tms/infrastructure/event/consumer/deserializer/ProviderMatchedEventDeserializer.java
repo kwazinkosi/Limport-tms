@@ -2,6 +2,7 @@ package com.limport.tms.infrastructure.event.consumer.deserializer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.limport.tms.application.event.pms.ProviderMatchedEvent;
+import com.limport.tms.domain.event.EventTypes;
 import com.limport.tms.infrastructure.event.consumer.BaseEventDeserializer;
 import com.limport.tms.infrastructure.event.consumer.IEventDeserializer;
 import org.springframework.stereotype.Component;
@@ -17,7 +18,7 @@ public class ProviderMatchedEventDeserializer
         extends BaseEventDeserializer 
         implements IEventDeserializer<ProviderMatchedEvent> {
     
-    private static final String EVENT_TYPE = "ProviderEvents.Matched";
+    private static final String EVENT_TYPE = EventTypes.Provider.MATCHED;
     
     @Override
     public String supportedEventType() {

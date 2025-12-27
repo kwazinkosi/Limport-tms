@@ -27,13 +27,4 @@ public interface IDomainEventService {
      * @param aggregateId the ID of the aggregate
      */
     void publishToOutbox(IDomainEvent event, String aggregateType, String aggregateId);
-    
-    /**
-     * Processes pending outbox events and publishes them to the message broker.
-     * Called by a scheduled job or triggered manually.
-     * 
-     * @param batchSize maximum number of events to process
-     * @return number of events successfully processed
-     */
-    int processPendingEvents(int batchSize);
 }

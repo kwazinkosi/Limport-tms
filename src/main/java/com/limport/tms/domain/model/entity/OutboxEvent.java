@@ -88,10 +88,12 @@ public class OutboxEvent {
     }
     
     /**
-     * Checks if the event can be retried.
+     * Resets the event status to PENDING for retry from dead letter queue.
      */
-    public boolean canRetry() {
-        return status == OutboxStatus.PENDING && retryCount < 3;
+    public void resetForRetry() {
+        this.status = OutboxStatus.PENDING;
+        this.errorMessage = null;
+        // Keep retryCount as is for tracking
     }
     
     // Getters

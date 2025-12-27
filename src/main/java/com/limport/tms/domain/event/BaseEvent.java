@@ -16,7 +16,7 @@ public abstract class BaseEvent implements IDomainEvent {
         this.occurredOn = Instant.now();
         this.version = 1; // Default version
         this.correlationId = generateOrInheritCorrelationId();
-        this.causationId = eventId.toString(); // Self-causation for root events
+        this.causationId = generateOrInheritCausationId(eventId.toString());
     }
 
     protected BaseEvent(int version) {
@@ -24,7 +24,7 @@ public abstract class BaseEvent implements IDomainEvent {
         this.occurredOn = Instant.now();
         this.version = version;
         this.correlationId = generateOrInheritCorrelationId();
-        this.causationId = eventId.toString(); // Self-causation for root events
+        this.causationId = generateOrInheritCausationId(eventId.toString());
     }
 
     protected BaseEvent(String correlationId, String causationId) {
@@ -32,7 +32,7 @@ public abstract class BaseEvent implements IDomainEvent {
         this.occurredOn = Instant.now();
         this.version = 1;
         this.correlationId = correlationId != null ? correlationId : generateOrInheritCorrelationId();
-        this.causationId = causationId != null ? causationId : eventId.toString();
+        this.causationId = causationId != null ? causationId : generateOrInheritCausationId(eventId.toString());
     }
 
     protected BaseEvent(int version, String correlationId, String causationId) {
@@ -40,7 +40,7 @@ public abstract class BaseEvent implements IDomainEvent {
         this.occurredOn = Instant.now();
         this.version = version;
         this.correlationId = correlationId != null ? correlationId : generateOrInheritCorrelationId();
-        this.causationId = causationId != null ? causationId : eventId.toString();
+        this.causationId = causationId != null ? causationId : generateOrInheritCausationId(eventId.toString());
     }
 
     public UUID getEventId() {
@@ -74,9 +74,16 @@ public abstract class BaseEvent implements IDomainEvent {
      * This enables distributed tracing across service boundaries.
      */
     private String generateOrInheritCorrelationId() {
-        // Check if there's an existing correlation ID in thread-local or MDC
-        // For now, generate a new one. In a real implementation, this would
-        // check for existing correlation IDs from incoming requests/events
-        return UUID.randomUUID().toString();
+        return CorrelationIdContext.getOrGenerateCorrelationId();
+    }
+
+    /**
+     * Generates or inherits causation ID from thread-local context.
+     * For root events (no existing causation), uses the provided default (typically eventId).
+     * For events caused by other events, uses the causation ID from context.
+     */
+    private String generateOrInheritCausationId(String defaultCausationId) {
+        String existingCausationId = CorrelationIdContext.getCausationId();
+        return existingCausationId != null ? existingCausationId : defaultCausationId;
     }
 }

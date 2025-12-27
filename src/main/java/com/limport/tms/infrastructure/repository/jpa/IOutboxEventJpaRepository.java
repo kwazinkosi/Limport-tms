@@ -28,4 +28,10 @@ public interface IOutboxEventJpaRepository extends JpaRepository<OutboxEventJpaE
     @Modifying
     @Query("DELETE FROM OutboxEventJpaEntity o WHERE o.status = 'PROCESSED' AND o.processedAt < :before")
     int deleteProcessedBefore(@Param("before") Instant before);
+    
+    /**
+     * Count pending events for monitoring.
+     */
+    @Query("SELECT COUNT(o) FROM OutboxEventJpaEntity o WHERE o.status = 'PENDING'")
+    long countPendingEvents();
 }

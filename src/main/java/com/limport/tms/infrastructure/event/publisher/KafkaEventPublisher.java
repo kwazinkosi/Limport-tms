@@ -45,6 +45,35 @@ public class KafkaEventPublisher implements IEventPublisher {
     @Value("${tms.kafka.topic.prefix:tms.events}")
     private String topicPrefix;
     
+    // Configurable topic transformation rules
+    // Maps event type prefixes to their topic transformation rules
+    private final Map<String, TopicTransformationRule> topicRules = Map.of(
+        "TMS.Transport", new TopicTransformationRule("TMS.Transport.", ""),
+        "PMS.Provider", new TopicTransformationRule("PMS.Provider.", "provider")
+    );
+    
+    /**
+     * Represents a rule for transforming event types to topic names.
+     */
+    private static class TopicTransformationRule {
+        private final String prefixToRemove;
+        private final String topicSuffix;
+        
+        public TopicTransformationRule(String prefixToRemove, String topicSuffix) {
+            this.prefixToRemove = prefixToRemove;
+            this.topicSuffix = topicSuffix;
+        }
+        
+        public String transform(String eventType) {
+            if (eventType.startsWith(prefixToRemove)) {
+                String suffix = eventType.substring(prefixToRemove.length())
+                    .toLowerCase();
+                return topicSuffix.isEmpty() ? suffix : topicSuffix + "." + suffix;
+            }
+            return eventType.toLowerCase();
+        }
+    }
+    
     public KafkaEventPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
             IEventSerializer eventSerializer,
@@ -175,16 +204,30 @@ public class KafkaEventPublisher implements IEventPublisher {
     }
     
     /**
-     * Builds the Kafka topic name from the event type.
-     * Example: TMS.Transport.Request.Created -> tms.events.transport.request.created
+     * Builds the Kafka topic name from the event type using configurable transformation rules.
+     * 
+     * The method applies transformation rules based on event type prefixes:
+     * - TMS.Transport.* events -> tms.events.*
+     * - PMS.Provider.* events -> tms.events.provider.*
+     * - Unknown prefixes -> fallback to generic transformation
+     * 
+     * Example: TMS.Transport.Request.Created -> tms.events.request.created
      */
     private String buildTopic(IDomainEvent event) {
-        String eventType = event.eventType()
-            .replace("TMS.Transport.", "")
-            .replace("PMS.Provider.", "")
-            .replace(".", "-")
-            .toLowerCase();
-        return topicPrefix + "." + eventType;
+        String eventType = event.eventType();
+        
+        // Find the appropriate transformation rule
+        for (Map.Entry<String, TopicTransformationRule> entry : topicRules.entrySet()) {
+            if (eventType.startsWith(entry.getKey())) {
+                String transformedSuffix = entry.getValue().transform(eventType);
+                return topicPrefix + "." + transformedSuffix;
+            }
+        }
+        
+        // Fallback for unknown event types - use generic transformation
+        log.warn("No topic transformation rule found for event type: {}. Using fallback transformation.", eventType);
+        String fallbackTopic = eventType.replace(".", "-").toLowerCase();
+        return topicPrefix + "." + fallbackTopic;
     }
     
     /**

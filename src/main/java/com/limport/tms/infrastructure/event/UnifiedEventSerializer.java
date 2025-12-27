@@ -3,13 +3,16 @@ package com.limport.tms.infrastructure.event;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.limport.tms.application.event.ExternalEvent;
 import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
+import com.limport.tms.domain.event.EventTypes;
 import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.event.states.*;
 import com.limport.tms.infrastructure.event.consumer.IEventDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -26,6 +29,7 @@ import java.util.stream.Collectors;
  * to eliminate redundancy and provide consistent serialization across the application.
  */
 @Component
+@Primary
 public class UnifiedEventSerializer implements IUnifiedEventSerializer {
 
     private static final Logger log = LoggerFactory.getLogger(UnifiedEventSerializer.class);
@@ -49,14 +53,14 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
         Map<String, Class<? extends IDomainEvent>> registry = new ConcurrentHashMap<>();
 
         // Register all transport request events
-        registry.put("TransportEvents.Request.Created", TransportRequestCreatedEvent.class);
-        registry.put("TransportEvents.Request.Updated", TransportRequestUpdatedEvent.class);
-        registry.put("TransportEvents.Request.Cancelled", TransportRequestCancelledEvent.class);
-        registry.put("TransportEvents.Request.Assigned", TransportRequestAssignedEvent.class);
-        registry.put("TransportEvents.Request.Completed", TransportRequestCompletedEvent.class);
+        registry.put(EventTypes.Transport.Request.CREATED, TransportRequestCreatedEvent.class);
+        registry.put(EventTypes.Transport.Request.UPDATED, TransportRequestUpdatedEvent.class);
+        registry.put(EventTypes.Transport.Request.CANCELLED, TransportRequestCancelledEvent.class);
+        registry.put(EventTypes.Transport.Request.ASSIGNED, TransportRequestAssignedEvent.class);
+        registry.put(EventTypes.Transport.Request.COMPLETED, TransportRequestCompletedEvent.class);
 
         // Register route optimization events (TMS responsibility)
-        registry.put("TransportEvents.Route.Optimized", TransportRouteOptimizedEvent.class);
+        registry.put(EventTypes.Transport.Route.OPTIMIZED, TransportRouteOptimizedEvent.class);
 
         return registry;
     }
@@ -78,7 +82,20 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
     @Override
     public String serialize(IDomainEvent event) {
         try {
-            return objectMapper.writeValueAsString(event);
+            // Create a wrapper with version information
+            ObjectNode wrapper = objectMapper.createObjectNode();
+            wrapper.put("version", event.getVersion());
+            wrapper.put("eventType", event.eventType());
+            
+            // Serialize the event data
+            String eventJson = objectMapper.writeValueAsString(event);
+            JsonNode eventNode = objectMapper.readTree(eventJson);
+            
+            // Add all event fields to the wrapper
+            eventNode.fields().forEachRemaining(entry -> 
+                wrapper.set(entry.getKey(), entry.getValue()));
+            
+            return objectMapper.writeValueAsString(wrapper);
         } catch (JsonProcessingException e) {
             throw new EventSerializationException("Failed to serialize event: " + event.eventType(), e);
         }
@@ -93,10 +110,53 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
         }
 
         try {
-            return objectMapper.readValue(payload, eventClass);
+            JsonNode jsonNode = objectMapper.readTree(payload);
+            
+            // Extract version for schema evolution handling
+            int version = extractVersion(jsonNode);
+            int currentVersion = getCurrentVersion(eventType);
+            
+            if (version > currentVersion) {
+                throw new EventSerializationException(
+                    "Event version " + version + " is newer than supported version " + currentVersion + 
+                    " for event type: " + eventType + ". Please upgrade the application.");
+            }
+            
+            if (version < currentVersion) {
+                log.debug("Deserializing event {} with older version {} (current: {})", 
+                    eventType, version, currentVersion);
+                // TODO: Implement version migration logic here
+                // For now, attempt direct deserialization and let Jackson handle compatibility
+            }
+            
+            // Remove wrapper fields before deserializing
+            ObjectNode cleanNode = jsonNode.deepCopy();
+            cleanNode.remove("version");
+            cleanNode.remove("eventType");
+            
+            return objectMapper.readValue(cleanNode.toString(), eventClass);
         } catch (JsonProcessingException e) {
             throw new EventSerializationException("Failed to deserialize domain event: " + eventType, e);
         }
+    }
+    
+    /**
+     * Extracts the version from the event JSON.
+     * Defaults to 1 if not present for backward compatibility.
+     */
+    private int extractVersion(JsonNode jsonNode) {
+        JsonNode versionNode = jsonNode.get("version");
+        return versionNode != null ? versionNode.asInt(1) : 1;
+    }
+    
+    /**
+     * Gets the current supported version for an event type.
+     * This should be maintained as events evolve.
+     */
+    private int getCurrentVersion(String eventType) {
+        // TODO: This could be moved to a configuration or registry
+        // For now, return 1 as default. Specific event types can override.
+        return 1;
     }
 
     @Override
@@ -135,6 +195,11 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
     }
 
     @Override
+    public boolean canDeserializeExternalEvent(String eventType) {
+        return externalEventDeserializerRegistry.containsKey(eventType);
+    }
+
+    @Override
     public IDomainEvent deserialize(String payload, String eventType) {
         return deserializeDomainEvent(payload, eventType);
     }
@@ -155,11 +220,5 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
         public EventSerializationException(String message, Throwable cause) {
             super(message, cause);
         }
-    }
-
-    @Override
-    public boolean canDeserializeExternalEvent(String eventType) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'canDeserializeExternalEvent'");
     }
 }

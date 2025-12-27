@@ -66,8 +66,10 @@ public class ExternalEventInboxEntity {
         this.status = retryCount >= 3 ? InboxStatus.FAILED : InboxStatus.PENDING;
     }
 
-    public boolean canRetry() {
-        return status == InboxStatus.PENDING && retryCount < 3;
+    public void resetForRetry() {
+        this.status = InboxStatus.PENDING;
+        this.errorMessage = null;
+        // Keep retryCount as is for tracking
     }
 
     // Getters

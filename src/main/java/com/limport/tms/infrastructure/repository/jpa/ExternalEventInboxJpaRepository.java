@@ -29,6 +29,12 @@ public interface ExternalEventInboxJpaRepository extends JpaRepository<ExternalE
     List<ExternalEventInboxEntity> findFailedEvents();
 
     /**
+     * Count pending events for monitoring.
+     */
+    @Query("SELECT COUNT(e) FROM ExternalEventInboxEntity e WHERE e.status = 'PENDING'")
+    long countPendingEvents();
+    
+    /**
      * Clean up old processed events.
      */
     @Query("DELETE FROM ExternalEventInboxEntity e WHERE e.status = 'PROCESSED' AND e.processedAt < :cutoffTime")

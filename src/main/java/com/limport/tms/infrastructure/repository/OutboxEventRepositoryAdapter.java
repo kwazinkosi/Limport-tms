@@ -77,4 +77,10 @@ public class OutboxEventRepositoryAdapter implements IOutboxEventRepository {
     public int deleteProcessedBefore(Instant before) {
         return jpaRepository.deleteProcessedBefore(before);
     }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public long countPendingEvents() {
+        return jpaRepository.countPendingEvents();
+    }
 }

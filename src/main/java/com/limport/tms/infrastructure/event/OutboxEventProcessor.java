@@ -1,6 +1,8 @@
 package com.limport.tms.infrastructure.event;
 
-import com.limport.tms.application.service.interfaces.IDomainEventService;
+import com.limport.tms.application.ports.IOutboxEventProcessor;
+import com.limport.tms.domain.ports.IOutboxEventRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,7 +18,9 @@ public class OutboxEventProcessor {
     
     private static final Logger log = LoggerFactory.getLogger(OutboxEventProcessor.class);
     
-    private final IDomainEventService domainEventService;
+    private final IOutboxEventProcessor outboxEventProcessor;
+    private final IOutboxEventRepository outboxRepository;
+    private final EventProcessingMetrics metrics;
     
     @Value("${tms.outbox.batch-size:100}")
     private int batchSize;
@@ -24,8 +28,13 @@ public class OutboxEventProcessor {
     @Value("${tms.outbox.enabled:true}")
     private boolean enabled;
     
-    public OutboxEventProcessor(IDomainEventService domainEventService) {
-        this.domainEventService = domainEventService;
+    public OutboxEventProcessor(
+            IOutboxEventProcessor outboxEventProcessor,
+            IOutboxEventRepository outboxRepository,
+            EventProcessingMetrics metrics) {
+        this.outboxEventProcessor = outboxEventProcessor;
+        this.outboxRepository = outboxRepository;
+        this.metrics = metrics;
     }
     
     /**
@@ -39,10 +48,15 @@ public class OutboxEventProcessor {
         }
         
         try {
-            int processed = domainEventService.processPendingEvents(batchSize);
+            int processed = outboxEventProcessor.processPendingEvents(batchSize);
             if (processed > 0) {
                 log.debug("Outbox processor published {} events", processed);
             }
+            
+            // Update queue size metrics
+            long pendingCount = outboxRepository.countPendingEvents();
+            metrics.updateOutboxQueueSize(pendingCount);
+            
         } catch (Exception e) {
             log.error("Error processing outbox: {}", e.getMessage(), e);
         }

@@ -1,6 +1,9 @@
 package com.limport.tms.infrastructure.event;
 
+import com.limport.tms.application.ports.IDeadLetterService;
+import com.limport.tms.domain.ports.IOutboxEventRepository;
 import com.limport.tms.infrastructure.persistance.repository.DeadLetterEventJpaRepository;
+import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
@@ -17,6 +20,8 @@ public class EventProcessingHealthIndicator implements HealthIndicator {
     private final DeadLetterQueueService deadLetterQueueService;
     private final CircuitBreaker circuitBreaker;
     private final EventProcessingMetrics metrics;
+    private final IOutboxEventRepository outboxRepository;
+    private final ExternalEventInboxJpaRepository inboxRepository;
 
     @Value("${tms.health.dead-letter-threshold:100}")
     private int deadLetterThreshold;
@@ -31,16 +36,20 @@ public class EventProcessingHealthIndicator implements HealthIndicator {
             DeadLetterEventJpaRepository deadLetterRepository,
             DeadLetterQueueService deadLetterQueueService,
             CircuitBreaker circuitBreaker,
-            EventProcessingMetrics metrics) {
+            EventProcessingMetrics metrics,
+            IOutboxEventRepository outboxRepository,
+            ExternalEventInboxJpaRepository inboxRepository) {
         this.deadLetterRepository = deadLetterRepository;
         this.deadLetterQueueService = deadLetterQueueService;
         this.circuitBreaker = circuitBreaker;
         this.metrics = metrics;
+        this.outboxRepository = outboxRepository;
+        this.inboxRepository = inboxRepository;
     }
 
     @Override
     public Health health() {
-        DeadLetterQueueService.DeadLetterStats deadLetterStats = deadLetterQueueService.getStats();
+        IDeadLetterService.DeadLetterStats deadLetterStats = deadLetterQueueService.getStats();
 
         // Check dead letter queue size
         long deadLetterCount = deadLetterStats.totalUnprocessed;
@@ -49,6 +58,26 @@ public class EventProcessingHealthIndicator implements HealthIndicator {
                 .withDetail("deadLetterQueue", deadLetterCount)
                 .withDetail("threshold", deadLetterThreshold)
                 .withDetail("status", "DEAD_LETTER_QUEUE_TOO_LARGE")
+                .build();
+        }
+
+        // Check outbox queue size
+        long outboxSize = outboxRepository.countPendingEvents();
+        if (outboxSize > outboxThreshold) {
+            return Health.down()
+                .withDetail("outboxSize", outboxSize)
+                .withDetail("threshold", outboxThreshold)
+                .withDetail("status", "OUTBOX_QUEUE_TOO_LARGE")
+                .build();
+        }
+
+        // Check inbox queue size
+        long inboxSize = inboxRepository.countPendingEvents();
+        if (inboxSize > inboxThreshold) {
+            return Health.down()
+                .withDetail("inboxSize", inboxSize)
+                .withDetail("threshold", inboxThreshold)
+                .withDetail("status", "INBOX_QUEUE_TOO_LARGE")
                 .build();
         }
 
@@ -64,9 +93,9 @@ public class EventProcessingHealthIndicator implements HealthIndicator {
         // All checks passed
         return Health.up()
             .withDetail("deadLetterQueue", deadLetterCount)
+            .withDetail("outboxSize", outboxSize)
+            .withDetail("inboxSize", inboxSize)
             .withDetail("circuitBreaker", circuitState)
-            .withDetail("outboxSize", 0) // TODO: Get from repository
-            .withDetail("inboxSize", 0)  // TODO: Get from repository
             .build();
     }
 }

@@ -2,6 +2,7 @@ package com.limport.tms.infrastructure.event.consumer.deserializer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.limport.tms.application.event.pms.ProviderCapacityChangedEvent;
+import com.limport.tms.domain.event.EventTypes;
 import com.limport.tms.infrastructure.event.consumer.BaseEventDeserializer;
 import com.limport.tms.infrastructure.event.consumer.IEventDeserializer;
 import org.springframework.stereotype.Component;
@@ -17,7 +18,7 @@ public class ProviderCapacityChangedEventDeserializer
         extends BaseEventDeserializer 
         implements IEventDeserializer<ProviderCapacityChangedEvent> {
     
-    private static final String EVENT_TYPE = "ProviderEvents.CapacityChanged";
+    private static final String EVENT_TYPE = EventTypes.Provider.CAPACITY_CHANGED;
     
     @Override
     public String supportedEventType() {

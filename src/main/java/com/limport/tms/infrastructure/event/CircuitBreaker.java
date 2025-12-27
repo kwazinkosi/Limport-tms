@@ -2,6 +2,7 @@ package com.limport.tms.infrastructure.event;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -25,13 +26,25 @@ public class CircuitBreaker {
     }
 
     private final ConcurrentHashMap<String, CircuitBreakerState> circuits = new ConcurrentHashMap<>();
+    private final int failureThreshold;
+    private final int successThreshold;
+    private final long timeoutMs;
+
+    public CircuitBreaker(
+            @Value("${tms.circuitbreaker.failure-threshold:5}") int failureThreshold,
+            @Value("${tms.circuitbreaker.success-threshold:3}") int successThreshold,
+            @Value("${tms.circuitbreaker.timeout-ms:60000}") long timeoutMs) {
+        this.failureThreshold = failureThreshold;
+        this.successThreshold = successThreshold;
+        this.timeoutMs = timeoutMs;
+    }
 
     /**
      * Executes an operation with circuit breaker protection.
      */
     public <T> T execute(String serviceName, CircuitBreakerOperation<T> operation) throws Exception {
         CircuitBreakerState state = circuits.computeIfAbsent(serviceName,
-            k -> new CircuitBreakerState());
+            k -> new CircuitBreakerState(failureThreshold, successThreshold, timeoutMs));
 
         if (state.getState() == State.OPEN) {
             if (state.shouldAttemptReset()) {
@@ -85,10 +98,20 @@ public class CircuitBreaker {
         private final AtomicInteger successCount = new AtomicInteger(0);
         private volatile Instant lastFailureTime = Instant.now();
 
-        // Configuration - could be made configurable
-        private static final int FAILURE_THRESHOLD = 5;
-        private static final int SUCCESS_THRESHOLD = 3;
-        private static final long TIMEOUT_MS = 60000; // 1 minute
+        private final int failureThreshold;
+        private final int successThreshold;
+        private final long timeoutMs;
+
+        // Default constructor with reasonable defaults
+        public CircuitBreakerState() {
+            this(5, 3, 60000);
+        }
+
+        public CircuitBreakerState(int failureThreshold, int successThreshold, long timeoutMs) {
+            this.failureThreshold = failureThreshold;
+            this.successThreshold = successThreshold;
+            this.timeoutMs = timeoutMs;
+        }
 
         public State getState() {
             return state.get();
@@ -102,7 +125,7 @@ public class CircuitBreaker {
             failureCount.set(0);
             if (state.get() == State.HALF_OPEN) {
                 int successes = successCount.incrementAndGet();
-                if (successes >= SUCCESS_THRESHOLD) {
+                if (successes >= successThreshold) {
                     state.set(State.CLOSED);
                     successCount.set(0);
                     log.info("Circuit breaker closed after {} successes", successes);
@@ -118,7 +141,7 @@ public class CircuitBreaker {
             if (state.get() == State.HALF_OPEN) {
                 state.set(State.OPEN);
                 log.warn("Circuit breaker opened due to failure in HALF_OPEN state");
-            } else if (failureCount.get() >= FAILURE_THRESHOLD) {
+            } else if (failureCount.get() >= failureThreshold) {
                 state.set(State.OPEN);
                 log.warn("Circuit breaker opened after {} failures", failureCount.get());
             }
@@ -126,7 +149,7 @@ public class CircuitBreaker {
 
         public boolean shouldAttemptReset() {
             return state.get() == State.OPEN &&
-                   Instant.now().isAfter(lastFailureTime.plusMillis(TIMEOUT_MS));
+                   Instant.now().isAfter(lastFailureTime.plusMillis(timeoutMs));
         }
     }
 }

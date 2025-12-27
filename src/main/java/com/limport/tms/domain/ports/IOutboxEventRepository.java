@@ -46,6 +46,12 @@ public interface IOutboxEventRepository {
     void update(OutboxEvent event);
     
     /**
+     * Counts pending events for monitoring.
+     * @return number of pending events
+     */
+    long countPendingEvents();
+    
+    /**
      * Deletes processed events older than the specified timestamp.
      * Used for cleanup/archival.
      * @param before delete events processed before this time

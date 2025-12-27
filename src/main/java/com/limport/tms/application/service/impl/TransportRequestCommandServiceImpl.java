@@ -8,8 +8,9 @@ import com.limport.tms.application.mapper.TransportRequestMapper;
 import com.limport.tms.application.ports.IProviderMatchingClient;
 import com.limport.tms.application.service.interfaces.IDomainEventService;
 import com.limport.tms.application.service.interfaces.ITransportRequestCommandService;
-import com.limport.tms.domain.event.states.*;
+import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.exception.TransportRequestNotFoundException;
+import com.limport.tms.domain.model.aggregate.TransportRequestAggregate;
 import com.limport.tms.domain.model.entity.Assignment;
 import com.limport.tms.domain.model.entity.TransportRequest;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
@@ -21,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -57,43 +60,30 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
     @Override
     @Transactional
     public TransportRequestResponse createTransportRequest(CreateTransportRequest request) {
-        // Create domain entity
-        TransportRequest transportRequest = new TransportRequest();
-        transportRequest.setId(UUID.randomUUID());
-        transportRequest.setReference(generateReference());
-        transportRequest.setCustomerId(request.getCustomerId());
-        transportRequest.setOriginLocationCode(request.getOriginLocationCode());
-        transportRequest.setDestinationLocationCode(request.getDestinationLocationCode());
-        transportRequest.setPickupFrom(request.getPickupFrom());
-        transportRequest.setPickupUntil(request.getPickupFrom().plusHours(4)); // Default 4-hour window
-        transportRequest.setDeliveryFrom(request.getDeliveryUntil().minusHours(2)); // Default 2-hour window
-        transportRequest.setDeliveryUntil(request.getDeliveryUntil());
-        transportRequest.setTotalWeight(request.getTotalWeight());
-        transportRequest.setTotalPackages(request.getTotalPackages());
-        transportRequest.setStatus(TransportRequestStatus.REQUESTED);
-        
-        Instant now = Instant.now();
-        transportRequest.setCreatedAt(now);
-        transportRequest.setLastUpdatedAt(now);
-
-        // Persist
-        TransportRequest saved = repository.save(transportRequest);
-
-        // Publish domain event
+        // Create domain aggregate (encapsulates business logic and raises events)
         Map<String, Object> requestDetails = new HashMap<>();
         requestDetails.put("totalWeight", request.getTotalWeight());
         requestDetails.put("totalPackages", request.getTotalPackages());
+        requestDetails.put("pickupFrom", request.getPickupFrom());
+        requestDetails.put("pickupUntil", request.getPickupFrom().plusHours(4)); // Default 4-hour window
+        requestDetails.put("deliveryFrom", request.getDeliveryUntil().minusHours(2)); // Default 2-hour window
+        requestDetails.put("deliveryUntil", request.getDeliveryUntil());
         requestDetails.put("notes", request.getNotes());
 
-        TransportRequestCreatedEvent event = new TransportRequestCreatedEvent(
-                saved.getId(),
-                saved.getCustomerId(),
-                saved.getOriginLocationCode(),
-                saved.getDestinationLocationCode(),
-                requestDetails
+        TransportRequestAggregate aggregate = TransportRequestAggregate.create(
+            request.getCustomerId(),
+            request.getOriginLocationCode(),
+            request.getDestinationLocationCode(),
+            requestDetails
         );
-        
-        eventService.publishToOutbox(event, "TransportRequest", saved.getId().toString());
+
+        // Convert aggregate to entity and persist
+        TransportRequest transportRequest = aggregateToEntity(aggregate);
+        transportRequest.setReference(generateReference());
+        TransportRequest saved = repository.save(transportRequest);
+
+        // Publish domain events raised by the aggregate
+        eventService.collectAndStore(aggregate, "TransportRequest");
 
         return mapper.toResponse(saved);
     }
@@ -101,22 +91,26 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
     @Override
     @Transactional
     public TransportRequestResponse assignProvider(UUID id, AssignProviderRequest request) {
-        TransportRequest transportRequest = repository.findById(id)
+        // Load existing transport request
+        TransportRequest existingEntity = repository.findById(id)
                 .orElseThrow(() -> new TransportRequestNotFoundException(id));
 
-        // Validate state transition
+        // Reconstitute aggregate from entity
+        TransportRequestAggregate aggregate = entityToAggregate(existingEntity);
+
+        // Validate state transition using state machine
         TransportRequestStateMachine.validateTransition(
-            transportRequest.getStatus(), 
+            aggregate.getStatus(),
             TransportRequestStatus.PLANNED
         );
 
         // TMS validates route feasibility (TMS owns route optimization)
         IRouteValidator.RouteOptimizationResult routeResult = routeValidator.optimizeRoute(
-            transportRequest.getId(),
-            transportRequest.getOriginLocationCode(),
-            transportRequest.getDestinationLocationCode()
+            aggregate.getId(),
+            aggregate.getOrigin(),
+            aggregate.getDestination()
         );
-        
+
         if (!routeResult.isFeasible()) {
             throw new com.limport.tms.domain.exception.RouteNotFeasibleException(
                 routeResult.getMessage()
@@ -124,13 +118,13 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
         }
 
         // PMS validates capacity (PMS owns provider/capacity data)
-        IProviderMatchingClient.CapacityVerificationResponse capacityResult = 
+        IProviderMatchingClient.CapacityVerificationResponse capacityResult =
             pmsClient.verifyCapacity(
                 request.getProviderId(),
-                transportRequest.getId(),
-                transportRequest.getTotalWeight() != null ? transportRequest.getTotalWeight().doubleValue() : 0.0
+                aggregate.getId(),
+                (Double) aggregate.getDetails().getOrDefault("totalWeight", 0.0)
             );
-        
+
         if (!capacityResult.isSufficient()) {
             throw new com.limport.tms.domain.exception.InsufficientCapacityException(
                 capacityResult.requiredCapacity(),
@@ -140,7 +134,7 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
 
         // Create assignment entity
         Assignment assignment = Assignment.createNew(
-            transportRequest.getId(),
+            aggregate.getId(),
             request.getProviderId(),
             request.getVehicleId(),
             request.getScheduledPickup(),
@@ -150,92 +144,147 @@ public class TransportRequestCommandServiceImpl implements ITransportRequestComm
         );
         assignmentRepository.save(assignment);
 
-        // Update transport request status
-        TransportRequestStatus previousStatus = transportRequest.getStatus();
-        transportRequest.setStatus(TransportRequestStatus.PLANNED);
-        transportRequest.setLastUpdatedAt(Instant.now());
+        // Execute domain logic through aggregate (raises domain events)
+        aggregate.assignProvider(request.getProviderId(), request.getVehicleId(), request.getAssignmentNotes());
 
-        TransportRequest updated = repository.save(transportRequest);
+        // Convert updated aggregate back to entity and persist
+        TransportRequest updatedEntity = aggregateToEntity(aggregate);
+        TransportRequest saved = repository.save(updatedEntity);
 
-        // Publish domain event
-        TransportRequestAssignedEvent event = new TransportRequestAssignedEvent(
-                updated.getId(),
-                updated.getCustomerId(),
-                previousStatus,
-                request.getProviderId(),
-                request.getVehicleId(),
-                request.getAssignmentNotes()
-        );
-        
-        eventService.publishToOutbox(event, "TransportRequest", updated.getId().toString());
+        // Publish domain events raised by the aggregate
+        eventService.collectAndStore(aggregate, "TransportRequest");
 
-        return mapper.toResponse(updated);
+        return mapper.toResponse(saved);
     }
 
     @Override
     @Transactional
     public TransportRequestResponse cancelTransportRequest(UUID id, CancelTransportRequestRequest request) {
-        TransportRequest transportRequest = repository.findById(id)
+        // Load existing transport request
+        TransportRequest existingEntity = repository.findById(id)
                 .orElseThrow(() -> new TransportRequestNotFoundException(id));
+
+        // Reconstitute aggregate from entity
+        TransportRequestAggregate aggregate = entityToAggregate(existingEntity);
 
         // Validate state transition using state machine
         TransportRequestStateMachine.validateTransition(
-            transportRequest.getStatus(), 
+            aggregate.getStatus(),
             TransportRequestStatus.CANCELLED
         );
 
-        TransportRequestStatus previousStatus = transportRequest.getStatus();
-        transportRequest.setStatus(TransportRequestStatus.CANCELLED);
-        transportRequest.setLastUpdatedAt(Instant.now());
+        // Execute domain logic through aggregate (raises domain events)
+        aggregate.cancel(request.getReason(), request.getCancelledBy());
 
-        TransportRequest updated = repository.save(transportRequest);
+        // Convert updated aggregate back to entity and persist
+        TransportRequest updatedEntity = aggregateToEntity(aggregate);
+        TransportRequest saved = repository.save(updatedEntity);
 
-        // Publish domain event
-        TransportRequestCancelledEvent event = new TransportRequestCancelledEvent(
-                updated.getId(),
-                updated.getCustomerId(),
-                previousStatus,
-                request.getReason(),
-                request.getCancelledBy()
-        );
-        
-        eventService.publishToOutbox(event, "TransportRequest", updated.getId().toString());
+        // Publish domain events raised by the aggregate
+        eventService.collectAndStore(aggregate, "TransportRequest");
 
-        return mapper.toResponse(updated);
+        return mapper.toResponse(saved);
     }
 
     @Override
     @Transactional
     public TransportRequestResponse completeTransportRequest(UUID id) {
-        TransportRequest transportRequest = repository.findById(id)
+        // Load existing transport request
+        TransportRequest existingEntity = repository.findById(id)
                 .orElseThrow(() -> new TransportRequestNotFoundException(id));
+
+        // Reconstitute aggregate from entity
+        TransportRequestAggregate aggregate = entityToAggregate(existingEntity);
 
         // Validate state transition using state machine
         TransportRequestStateMachine.validateTransition(
-            transportRequest.getStatus(), 
+            aggregate.getStatus(),
             TransportRequestStatus.COMPLETED
         );
 
-        TransportRequestStatus previousStatus = transportRequest.getStatus();
-        transportRequest.setStatus(TransportRequestStatus.COMPLETED);
-        transportRequest.setLastUpdatedAt(Instant.now());
+        // Execute domain logic through aggregate (raises domain events)
+        aggregate.complete("Transport completed successfully");
 
-        TransportRequest updated = repository.save(transportRequest);
+        // Convert updated aggregate back to entity and persist
+        TransportRequest updatedEntity = aggregateToEntity(aggregate);
+        TransportRequest saved = repository.save(updatedEntity);
 
-        // Publish domain event
-        TransportRequestCompletedEvent event = new TransportRequestCompletedEvent(
-                updated.getId(),
-                updated.getCustomerId(),
-                previousStatus,
-                "Transport completed successfully"
-        );
-        
-        eventService.publishToOutbox(event, "TransportRequest", updated.getId().toString());
+        // Publish domain events raised by the aggregate
+        eventService.collectAndStore(aggregate, "TransportRequest");
 
-        return mapper.toResponse(updated);
+        return mapper.toResponse(saved);
     }
 
     private String generateReference() {
         return "TR-" + System.currentTimeMillis();
     }
+
+    /**
+     * Converts a TransportRequestAggregate to a TransportRequest entity for persistence.
+     */
+    private TransportRequest aggregateToEntity(TransportRequestAggregate aggregate) {
+        TransportRequest entity = new TransportRequest();
+        entity.setId(aggregate.getId());
+        entity.setCustomerId(aggregate.getUserId());
+        entity.setOriginLocationCode(aggregate.getOrigin());
+        entity.setDestinationLocationCode(aggregate.getDestination());
+        entity.setStatus(aggregate.getStatus());
+        entity.setCreatedAt(aggregate.getCreatedAt());
+        entity.setLastUpdatedAt(aggregate.getUpdatedAt());
+
+        // Extract details from aggregate
+        Map<String, Object> details = aggregate.getDetails();
+        if (details != null) {
+            Integer weight = (Integer) details.get("totalWeight");
+            entity.setTotalWeight(weight != null ? BigDecimal.valueOf(weight) : null);
+            entity.setTotalPackages((Integer) details.get("totalPackages"));
+            entity.setPickupFrom(toLocalDateTime((Instant) details.get("pickupFrom")));
+            entity.setPickupUntil(toLocalDateTime((Instant) details.get("pickupUntil")));
+            entity.setDeliveryFrom(toLocalDateTime((Instant) details.get("deliveryFrom")));
+            entity.setDeliveryUntil(toLocalDateTime((Instant) details.get("deliveryUntil")));
+        }
+
+        return entity;
+    }
+
+    /**
+     * Converts a TransportRequest entity to a TransportRequestAggregate for domain operations.
+     */
+    private TransportRequestAggregate entityToAggregate(TransportRequest entity) {
+        // Reconstruct details map from entity fields
+        Map<String, Object> details = new HashMap<>();
+        BigDecimal weight = entity.getTotalWeight();
+        details.put("totalWeight", weight != null ? weight.intValue() : null);
+        details.put("totalPackages", entity.getTotalPackages());
+        details.put("pickupFrom", toInstant(entity.getPickupFrom()));
+        details.put("pickupUntil", toInstant(entity.getPickupUntil()));
+        details.put("deliveryFrom", toInstant(entity.getDeliveryFrom()));
+        details.put("deliveryUntil", toInstant(entity.getDeliveryUntil()));
+
+        return TransportRequestAggregate.reconstitute(
+            entity.getId(),
+            entity.getCustomerId(),
+            entity.getOriginLocationCode(),
+            entity.getDestinationLocationCode(),
+            entity.getStatus(),
+            null, // assignedProviderId - would need to be loaded separately if needed
+            null, // assignedVehicleId - would need to be loaded separately if needed
+            details,
+            entity.getCreatedAt(),
+            entity.getLastUpdatedAt()
+        );
+    }
+
+    private LocalDateTime toLocalDateTime(Instant instant) {
+        return instant != null ? LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC) : null;
+    }
+
+    private Instant toInstant(LocalDateTime localDateTime) {
+        return localDateTime != null ? localDateTime.toInstant(java.time.ZoneOffset.UTC) : null;
+    }
+
+    /**
+     * Publishes all domain events raised by the aggregate to the outbox.
+     */
+
 }

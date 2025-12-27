@@ -1,16 +1,23 @@
 package com.limport.tms.infrastructure.event;
 
 import com.limport.tms.application.ports.IDeadLetterService;
+import com.limport.tms.domain.model.entity.OutboxEvent;
+import com.limport.tms.domain.ports.IOutboxEventRepository;
 import com.limport.tms.infrastructure.persistance.entity.DeadLetterEventEntity;
+import com.limport.tms.infrastructure.persistance.entity.ExternalEventInboxEntity;
 import com.limport.tms.infrastructure.persistance.repository.DeadLetterEventJpaRepository;
+import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Service for managing dead letter queue operations.
@@ -22,17 +29,27 @@ public class DeadLetterQueueService implements IDeadLetterService {
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueService.class);
 
     private final DeadLetterEventJpaRepository deadLetterRepository;
+    private final IOutboxEventRepository outboxRepository;
+    private final ExternalEventInboxJpaRepository inboxRepository;
     private final CircuitBreaker circuitBreaker;
 
-    // Configuration
-    private static final int MAX_RETRIES = 5;
-    private static final long INITIAL_RETRY_DELAY_MS = 1000; // 1 second
-    private static final long MAX_RETRY_DELAY_MS = 300000;   // 5 minutes
+    @Value("${tms.deadletter.max-retries:5}")
+    private int maxRetries;
+
+    @Value("${tms.deadletter.initial-retry-delay-ms:1000}")
+    private long initialRetryDelayMs;
+
+    @Value("${tms.deadletter.max-retry-delay-ms:300000}")
+    private long maxRetryDelayMs;
 
     public DeadLetterQueueService(
             DeadLetterEventJpaRepository deadLetterRepository,
+            IOutboxEventRepository outboxRepository,
+            ExternalEventInboxJpaRepository inboxRepository,
             CircuitBreaker circuitBreaker) {
         this.deadLetterRepository = deadLetterRepository;
+        this.outboxRepository = outboxRepository;
+        this.inboxRepository = inboxRepository;
         this.circuitBreaker = circuitBreaker;
     }
 
@@ -65,14 +82,14 @@ public class DeadLetterQueueService implements IDeadLetterService {
 
         event.incrementFailureCount();
 
-        if (!event.isExpired(MAX_RETRIES)) {
+        if (!event.isExpired(maxRetries)) {
             Instant nextRetryAt = calculateNextRetryTime(event.getFailureCount());
             event.scheduleNextRetry(nextRetryAt);
             log.warn("Updated dead letter event {} failure count to {}. Next retry at: {}",
                 event.getEventId(), event.getFailureCount(), nextRetryAt);
         } else {
             log.error("Dead letter event {} has exceeded max retries ({})",
-                event.getEventId(), MAX_RETRIES);
+                event.getEventId(), maxRetries);
         }
 
         deadLetterRepository.save(event);
@@ -125,7 +142,7 @@ public class DeadLetterQueueService implements IDeadLetterService {
     @Transactional
     public void cleanupExpiredEvents() {
         List<DeadLetterEventEntity> expiredEvents = deadLetterRepository
-            .findExpiredEvents(MAX_RETRIES);
+            .findExpiredEvents(maxRetries);
 
         if (!expiredEvents.isEmpty()) {
             log.info("Cleaning up {} expired dead letter events", expiredEvents.size());
@@ -135,24 +152,54 @@ public class DeadLetterQueueService implements IDeadLetterService {
 
     /**
      * Attempts to retry processing a dead letter event.
-     * This method should be implemented based on the specific retry logic needed.
+     * Resets the original event status to PENDING so it can be reprocessed.
      */
-    private void retryEvent(DeadLetterEventEntity event) {
-        // This would need to be implemented based on the specific event processing logic
-        // For now, we'll just log that a retry was attempted
-        log.info("Retrying dead letter event: {} (attempt {})",
-            event.getEventId(), event.getFailureCount() + 1);
+    private void retryEvent(DeadLetterEventEntity deadLetterEvent) {
+        String source = deadLetterEvent.getSource();
+        String eventId = deadLetterEvent.getEventId();
 
-        // TODO: Implement actual retry logic based on event source (OUTBOX vs INBOX)
-        // This would involve calling the appropriate service to reprocess the event
+        log.info("Retrying dead letter event: {} from {} (attempt {})",
+            eventId, source, deadLetterEvent.getFailureCount() + 1);
+
+        try {
+            if ("OUTBOX".equals(source)) {
+                // Reset outbox event to pending
+                UUID outboxId = UUID.fromString(eventId);
+                Optional<OutboxEvent> outboxEventOpt = outboxRepository.findById(outboxId);
+                if (outboxEventOpt.isPresent()) {
+                    OutboxEvent outboxEvent = outboxEventOpt.get();
+                    outboxEvent.resetForRetry();
+                    outboxRepository.update(outboxEvent);
+                    log.debug("Reset outbox event {} to PENDING for retry", eventId);
+                } else {
+                    log.warn("Outbox event {} not found for retry", eventId);
+                }
+            } else if ("INBOX".equals(source)) {
+                // Reset inbox event to pending
+                UUID inboxId = UUID.fromString(eventId);
+                ExternalEventInboxEntity inboxEvent = inboxRepository.findById(inboxId).orElse(null);
+                if (inboxEvent != null) {
+                    inboxEvent.resetForRetry();
+                    inboxRepository.save(inboxEvent);
+                    log.debug("Reset inbox event {} to PENDING for retry", eventId);
+                } else {
+                    log.warn("Inbox event {} not found for retry", eventId);
+                }
+            } else {
+                log.error("Unknown dead letter source: {}", source);
+            }
+        } catch (Exception e) {
+            log.error("Failed to reset event {} for retry: {}", eventId, e.getMessage(), e);
+            throw e; // Re-throw to let circuit breaker handle
+        }
     }
 
     /**
      * Calculates next retry time using exponential backoff.
      */
     private Instant calculateNextRetryTime(int failureCount) {
-        long delayMs = INITIAL_RETRY_DELAY_MS * (long) Math.pow(2, failureCount - 1);
-        delayMs = Math.min(delayMs, MAX_RETRY_DELAY_MS);
+        long delayMs = initialRetryDelayMs * (long) Math.pow(2, failureCount - 1);
+        delayMs = Math.min(delayMs, maxRetryDelayMs);
         return Instant.now().plusMillis(delayMs);
     }
 

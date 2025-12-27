@@ -1,15 +1,15 @@
 package com.limport.tms.application.service.impl;
 
-import com.limport.tms.application.service.interfaces.IDomainEventService;
-import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
+import com.limport.tms.application.event.InternalEventHandlerRegistry;
 import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.model.aggregate.AggregateRoot;
 import com.limport.tms.domain.model.entity.OutboxEvent;
-import com.limport.tms.domain.ports.IEventPublisher;
 import com.limport.tms.domain.ports.IOutboxEventRepository;
-import com.limport.tms.application.ports.IDeadLetterService;
+import com.limport.tms.application.service.interfaces.IDomainEventService;
+import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +22,6 @@ import java.util.List;
  * 
  * Flow:
  * 1. collectAndStore: Saves events to outbox table (same transaction as aggregate)
- * 2. processPendingEvents: Polls outbox, publishes to broker, marks as processed
  */
 @Service
 public class DomainEventServiceImpl implements IDomainEventService {
@@ -30,19 +29,19 @@ public class DomainEventServiceImpl implements IDomainEventService {
     private static final Logger log = LoggerFactory.getLogger(DomainEventServiceImpl.class);
     
     private final IOutboxEventRepository outboxRepository;
-    private final IEventPublisher eventPublisher;
     private final IUnifiedEventSerializer eventSerializer;
-    private final IDeadLetterService deadLetterService;
+    private final InternalEventHandlerRegistry internalEventHandlerRegistry;
+    
+    @Value("${tms.outbox.backpressure-threshold:5000}")
+    private long backpressureThreshold;
     
     public DomainEventServiceImpl(
             IOutboxEventRepository outboxRepository,
-            IEventPublisher eventPublisher,
             IUnifiedEventSerializer eventSerializer,
-            IDeadLetterService deadLetterService) {
+            InternalEventHandlerRegistry internalEventHandlerRegistry) {
         this.outboxRepository = outboxRepository;
-        this.eventPublisher = eventPublisher;
         this.eventSerializer = eventSerializer;
-        this.deadLetterService = deadLetterService;
+        this.internalEventHandlerRegistry = internalEventHandlerRegistry;
     }
     
     @Override
@@ -51,11 +50,29 @@ public class DomainEventServiceImpl implements IDomainEventService {
         if (aggregate == null || !aggregate.hasPendingEvents()) {
             return;
         }
-        
+
+        // Check for backpressure - if outbox is too full, log warning but continue
+        // This prevents unbounded growth while still allowing the transaction to complete
+        long pendingCount = outboxRepository.countPendingEvents();
+        if (pendingCount > backpressureThreshold) {
+            log.warn("Outbox queue size {} exceeds backpressure threshold {}. " +
+                "Event processing may be delayed. Aggregate: {} ({})",
+                pendingCount, backpressureThreshold, aggregateType, aggregate.getId());
+        }
+
+        // Get events from aggregate
+        List<IDomainEvent> events = new ArrayList<>(aggregate.getDomainEvents());
+
+        // Dispatch events to synchronous internal handlers
+        for (IDomainEvent event : events) {
+            internalEventHandlerRegistry.dispatch(event);
+        }
+
+        // Store events in outbox for asynchronous external publishing
         List<OutboxEvent> outboxEvents = new ArrayList<>();
         String aggregateId = aggregate.getId().toString();
-        
-        for (IDomainEvent event : aggregate.getDomainEvents()) {
+
+        for (IDomainEvent event : events) {
             String payload = eventSerializer.serialize(event);
             OutboxEvent outboxEvent = new OutboxEvent(
                 event.eventType(),
@@ -66,12 +83,12 @@ public class DomainEventServiceImpl implements IDomainEventService {
             );
             outboxEvents.add(outboxEvent);
         }
-        
+
         outboxRepository.saveAll(outboxEvents);
         aggregate.clearDomainEvents();
-        
-        log.debug("Stored {} events for aggregate {} ({})", 
-            outboxEvents.size(), aggregateType, aggregateId);
+
+        log.debug("Processed {} events for aggregate {} ({}): {} handled internally, {} stored for external publishing",
+            events.size(), aggregateType, aggregateId, events.size(), outboxEvents.size());
     }
 
     @Override
@@ -89,51 +106,5 @@ public class DomainEventServiceImpl implements IDomainEventService {
         
         log.debug("Stored event {} for aggregate {} ({})", 
             event.eventType(), aggregateType, aggregateId);
-    }
-    
-    @Override
-    @Transactional
-    public int processPendingEvents(int batchSize) {
-        List<OutboxEvent> pendingEvents = outboxRepository.findPendingEvents(batchSize);
-        int successCount = 0;
-
-        for (OutboxEvent outboxEvent : pendingEvents) {
-            try {
-                IDomainEvent domainEvent = eventSerializer.deserialize(
-                    outboxEvent.getPayload(),
-                    outboxEvent.getEventType()
-                );
-
-eventPublisher.publish(domainEvent);
-                outboxEvent.markAsProcessed();
-                outboxRepository.update(outboxEvent);
-                successCount++;
-
-                log.debug("Published event: {} for aggregate {}",
-                    outboxEvent.getEventType(), outboxEvent.getAggregateId());
-
-            } catch (Exception e) {
-                log.error("Failed to process event {}: {}", outboxEvent.getId(), e.getMessage());
-                deadLetterService.storeFailedEvent(
-                    outboxEvent.getId().toString(),
-                    outboxEvent.getEventType(),
-                    outboxEvent.getPayload(),
-                    "OUTBOX",
-                    e.getMessage()
-                );
-                outboxEvent.markAsFailed(e.getMessage());
-                outboxRepository.update(outboxEvent);
-
-                // Break the loop on failure to prevent long delays if broker is down
-                // The transaction will commit the processed/failed events so far
-                break;
-            }
-        }
-
-        if (successCount > 0) {
-            log.info("Processed {}/{} outbox events", successCount, pendingEvents.size());
-        }
-
-        return successCount;
     }
 }

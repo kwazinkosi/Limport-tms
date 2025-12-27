@@ -36,6 +36,9 @@ public class ExternalEventConsumer {
 
     @Value("${tms.kafka.topics.pms-events:pms.events}")
     private String pmsEventsTopic;
+    
+    @Value("${tms.inbox.backpressure-threshold:2000}")
+    private long backpressureThreshold;
 
     public ExternalEventConsumer(
             IUnifiedEventSerializer eventSerializer,
@@ -81,6 +84,15 @@ public class ExternalEventConsumer {
      */
     @Transactional
     public void storeEventInInbox(String payload, String topic, long offset) {
+        // Check for backpressure - if inbox is too full, log warning but continue
+        // This prevents message loss while still allowing storage
+        long pendingCount = inboxRepository.countPendingEvents();
+        if (pendingCount > backpressureThreshold) {
+            log.warn("Inbox queue size {} exceeds backpressure threshold {}. " +
+                "Event processing may be delayed. Topic: {}, offset: {}",
+                pendingCount, backpressureThreshold, topic, offset);
+        }
+
         // Quick validation - try to extract event type
         var eventOptional = eventSerializer.deserializeExternalEvent(payload);
         if (eventOptional.isEmpty()) {
