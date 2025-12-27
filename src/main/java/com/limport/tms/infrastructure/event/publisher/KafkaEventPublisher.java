@@ -35,7 +35,6 @@ import java.util.concurrent.TimeoutException;
 public class KafkaEventPublisher implements IEventPublisher {
     
     private static final Logger log = LoggerFactory.getLogger(KafkaEventPublisher.class);
-    private static final int SEND_TIMEOUT_SECONDS = 10;
     
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final IUnifiedEventSerializer eventSerializer;
