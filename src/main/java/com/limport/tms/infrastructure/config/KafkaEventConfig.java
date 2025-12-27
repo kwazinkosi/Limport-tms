@@ -90,6 +90,14 @@ public class KafkaEventConfig {
     }
     
     @Bean
+    public NewTopic requestReMatchingTriggeredTopic() {
+        return TopicBuilder.name(topicPrefix + ".request-rematching-triggered")
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+    
+    @Bean
     public NewTopic capacityVerifiedTopic() {
         return TopicBuilder.name(topicPrefix + ".capacity-verified")
             .partitions(3)

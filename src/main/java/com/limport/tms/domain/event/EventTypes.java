@@ -16,6 +16,7 @@ public final class EventTypes {
             public static final String CANCELLED = PREFIX + ".Cancelled";
             public static final String COMPLETED = PREFIX + ".Completed";
             public static final String ASSIGNED = PREFIX + ".Assigned";
+            public static final String REMATCHING_TRIGGERED = PREFIX + ".ReMatchingTriggered";
         }
 
         public static final class Route {

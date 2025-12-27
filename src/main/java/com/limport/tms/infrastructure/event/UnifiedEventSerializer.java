@@ -58,6 +58,7 @@ public class UnifiedEventSerializer implements IUnifiedEventSerializer {
         registry.put(EventTypes.Transport.Request.CANCELLED, TransportRequestCancelledEvent.class);
         registry.put(EventTypes.Transport.Request.ASSIGNED, TransportRequestAssignedEvent.class);
         registry.put(EventTypes.Transport.Request.COMPLETED, TransportRequestCompletedEvent.class);
+        registry.put(EventTypes.Transport.Request.REMATCHING_TRIGGERED, TransportRequestReMatchingTriggeredEvent.class);
 
         // Register route optimization events (TMS responsibility)
         registry.put(EventTypes.Transport.Route.OPTIMIZED, TransportRouteOptimizedEvent.class);
