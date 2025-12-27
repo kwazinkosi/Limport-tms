@@ -45,6 +45,10 @@ tms:
     stub-mode: ${PMS_STUB_MODE:true}  # Set false when PMS is available
     timeout-seconds: 10
   
+  # Assignment retry configuration
+  assignment:
+    max-attempts: ${MAX_ASSIGNMENT_ATTEMPTS:3}  # Maximum attempts before marking unassignable
+  
   kafka:
     enabled: ${KAFKA_ENABLED:false}  # Enable when Kafka is available
     topic-prefix: tms.events

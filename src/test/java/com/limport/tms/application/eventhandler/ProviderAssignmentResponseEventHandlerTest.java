@@ -77,6 +77,9 @@ class ProviderAssignmentResponseEventHandlerTest {
             "Accepted via app",
             Instant.now()
         );
+
+        // Set default max attempts for tests
+        handler.setMaxAssignmentAttempts(3);
     }
 
     @Test

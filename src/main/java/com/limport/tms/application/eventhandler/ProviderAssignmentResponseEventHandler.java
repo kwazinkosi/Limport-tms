@@ -2,7 +2,6 @@ package com.limport.tms.application.eventhandler;
 
 import com.limport.tms.application.event.IExternalEventHandler;
 import com.limport.tms.application.event.pms.ProviderAssignmentResponseEvent;
-import com.limport.tms.application.event.pms.ProviderAssignmentResponseEvent.AssignmentResponse;
 import com.limport.tms.domain.event.EventTypes.Provider;
 import com.limport.tms.domain.model.entity.Assignment;
 import com.limport.tms.domain.model.entity.Assignment.AssignmentStatus;
@@ -14,6 +13,7 @@ import com.limport.tms.application.service.interfaces.IDomainEventService;
 import com.limport.tms.domain.event.states.TransportRequestReMatchingTriggeredEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,12 +33,17 @@ public class ProviderAssignmentResponseEventHandler implements IExternalEventHan
     
     private static final Logger log = LoggerFactory.getLogger(ProviderAssignmentResponseEventHandler.class);
     
-    /** Maximum number of assignment attempts before marking request as unassignable. */
-    private static final int MAX_ASSIGNMENT_ATTEMPTS = 3;
-    
     private final IAssignmentRepository assignmentRepository;
     private final ITransportRequestRepository transportRequestRepository;
     private final IDomainEventService domainEventService;
+    
+    @Value("${tms.assignment.max-attempts:3}")
+    int maxAssignmentAttempts;
+    
+    // For testing purposes
+    void setMaxAssignmentAttempts(int maxAssignmentAttempts) {
+        this.maxAssignmentAttempts = maxAssignmentAttempts;
+    }
     
     public ProviderAssignmentResponseEventHandler(
             IAssignmentRepository assignmentRepository,
@@ -149,7 +154,7 @@ public class ProviderAssignmentResponseEventHandler implements IExternalEventHan
         TransportRequest transportRequest = transportRequestOpt.get();
         int attempts = transportRequest.incrementAssignmentAttempts();
         
-        if (attempts >= MAX_ASSIGNMENT_ATTEMPTS) {
+        if (attempts >= maxAssignmentAttempts) {
             // Max retries exceeded - mark as unassignable for manual intervention
             transportRequest.setStatus(TransportRequestStatus.UNASSIGNABLE);
             transportRequestRepository.save(transportRequest);
@@ -169,12 +174,12 @@ public class ProviderAssignmentResponseEventHandler implements IExternalEventHan
                 providerName,
                 reason.equals("rejection") ? rejectionReason : null,
                 attempts,
-                MAX_ASSIGNMENT_ATTEMPTS
+                maxAssignmentAttempts
             );
             domainEventService.publishToOutbox(reMatchingEvent, "TransportRequest", transportRequestId.toString());
             
             log.info("Transport request {} set back to REQUESTED for re-matching after provider {} (attempt {}/{})",
-                transportRequestId, reason, attempts, MAX_ASSIGNMENT_ATTEMPTS);
+                transportRequestId, reason, attempts, maxAssignmentAttempts);
         }
     }
     

@@ -132,6 +132,7 @@ TMS publishes to the following Kafka topics:
 | `tms.events.request.cancelled` | TransportRequestCancelledEvent | Request cancelled by user/system |
 | `tms.events.request.assigned` | TransportRequestAssignedEvent | Request assigned to provider/vehicle |
 | `tms.events.request.completed` | TransportRequestCompletedEvent | Transport successfully completed |
+| `tms.events.request.rematching-triggered` | TransportRequestReMatchingTriggeredEvent | Request needs re-matching after provider rejection/timeout |
 | `tms.events.route.optimized` | TransportRouteOptimizedEvent | Optimal route determined |
 
 **Note**: Capacity verification events are published by PMS, not TMS.
