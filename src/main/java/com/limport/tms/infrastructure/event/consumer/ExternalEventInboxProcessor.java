@@ -68,8 +68,8 @@ public class ExternalEventInboxProcessor extends UnifiedEventProcessor<ExternalE
             return;
         }
 
-        int batchSize = eventProcessingProperties.getInboxBatchSize();
-        int processed = processPendingEvents(batchSize);
+        //int batchSize = eventProcessingProperties.getInboxBatchSize();
+        //int processed = processPendingEvents(batchSize);
         
         // Update queue size metrics
         long pendingCount = inboxRepository.countPendingEvents();
