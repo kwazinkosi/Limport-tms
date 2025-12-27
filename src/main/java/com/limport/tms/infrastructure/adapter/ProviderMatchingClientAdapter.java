@@ -1,6 +1,10 @@
 package com.limport.tms.infrastructure.adapter;
 
 import com.limport.tms.domain.port.service.IProviderMatchingClient;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,12 +16,11 @@ import org.springframework.web.client.RestClientException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * REST client adapter for Provider Matching Service (PMS).
- * Implements communication with external PMS microservice.
- * 
- * TODO: Add circuit breaker (Resilience4j), retry logic, and timeout configuration
+ * Implements communication with external PMS microservice with circuit breaker and retry logic.
  */
 @Component
 public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
@@ -26,16 +29,24 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
     
     private final RestClient restClient;
     private final boolean stubMode;
+    private final CircuitBreaker circuitBreaker;
+    private final Retry retry;
 
     public ProviderMatchingClientAdapter(
             RestClient.Builder restClientBuilder,
+            CircuitBreakerRegistry circuitBreakerRegistry,
+            RetryRegistry retryRegistry,
             @Value("${tms.pms.base-url:http://localhost:8081}") String pmsBaseUrl,
-            @Value("${tms.pms.stub-mode:true}") boolean stubMode) {
+            @Value("${tms.pms.stub-mode:false}") boolean stubMode) {
         this.stubMode = stubMode;
         this.restClient = restClientBuilder.baseUrl(pmsBaseUrl).build();
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("pms-client");
+        this.retry = retryRegistry.retry("pms-client");
         
         if (stubMode) {
             log.warn("PMS client running in STUB MODE - using mock data instead of calling PMS");
+        } else {
+            log.info("PMS client initialized with base URL: {}", pmsBaseUrl);
         }
     }
 
@@ -45,7 +56,7 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
             return verifyCapacityStub(providerId, requiredWeightKg);
         }
         
-        try {
+        Supplier<CapacityVerificationResponse> supplier = () -> {
             log.debug("Calling PMS to verify capacity for provider: {}", providerId);
             
             var response = restClient.get()
@@ -60,9 +71,12 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
                 ((Number) response.get("requiredCapacity")).doubleValue(),
                 (String) response.get("message")
             );
-            
-        } catch (RestClientException e) {
-            log.error("Failed to verify capacity with PMS for provider {}", providerId, e);
+        };
+        
+        try {
+            return Retry.decorateSupplier(retry, CircuitBreaker.decorateSupplier(circuitBreaker, supplier)).get();
+        } catch (Exception e) {
+            log.error("Failed to verify capacity with PMS for provider {} after retries", providerId, e);
             // Fail safely: return insufficient capacity when PMS is unavailable
             return CapacityVerificationResponse.unavailable(
                 "PMS unavailable - cannot verify capacity: " + e.getMessage()
@@ -82,7 +96,7 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
             return matchProvidersStub(weightKg);
         }
         
-        try {
+        Supplier<List<ProviderMatchResponse>> supplier = () -> {
             log.debug("Calling PMS to match providers for request: {}", requestId);
             
             Map<String, Object> request = Map.of(
@@ -102,9 +116,12 @@ public class ProviderMatchingClientAdapter implements IProviderMatchingClient {
             return response.stream()
                 .map(this::mapToProviderMatchResponse)
                 .toList();
-            
-        } catch (RestClientException e) {
-            log.error("Failed to match providers with PMS for request {}", requestId, e);
+        };
+        
+        try {
+            return Retry.decorateSupplier(retry, CircuitBreaker.decorateSupplier(circuitBreaker, supplier)).get();
+        } catch (Exception e) {
+            log.error("Failed to match providers with PMS for request {} after retries", requestId, e);
             throw new RuntimeException("Provider matching service unavailable: " + e.getMessage(), e);
         }
     }

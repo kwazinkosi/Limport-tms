@@ -42,12 +42,44 @@ tms:
   # Provider Matching Service (PMS) integration
   pms:
     base-url: ${PMS_BASE_URL:http://localhost:8081}
-    stub-mode: ${PMS_STUB_MODE:true}  # Set false when PMS is available
+    stub-mode: ${PMS_STUB_MODE:false}  # Set false when PMS is available
     timeout-seconds: 10
   
   # Assignment retry configuration
   assignment:
     max-attempts: ${MAX_ASSIGNMENT_ATTEMPTS:3}  # Maximum attempts before marking unassignable
+
+# Resilience4j configuration for external service calls
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 5s
+    instances:
+      pms-client:
+        baseConfig: default
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 60
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 100ms
+        retryExceptions:
+          - org.springframework.web.client.RestClientException
+    instances:
+      pms-client:
+        baseConfig: default
+        maxAttempts: 2
+        waitDuration: 500ms
   
   kafka:
     enabled: ${KAFKA_ENABLED:false}  # Enable when Kafka is available
