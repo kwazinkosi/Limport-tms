@@ -1,10 +1,15 @@
 package com.limport.tms.presentation.rest;
 
+import com.limport.tms.application.command.CancelTransportRequestCommand;
+import com.limport.tms.application.command.CompleteTransportRequestCommand;
+import com.limport.tms.application.command.CreateTransportRequestCommand;
+import com.limport.tms.application.cqrs.ICommandBus;
+import com.limport.tms.application.cqrs.IQueryBus;
 import com.limport.tms.application.dto.request.CancelTransportRequestRequest;
 import com.limport.tms.application.dto.request.CreateTransportRequest;
 import com.limport.tms.application.dto.response.TransportRequestResponse;
-import com.limport.tms.application.service.interfaces.ITransportRequestCommandService;
-import com.limport.tms.application.service.interfaces.ITransportRequestQueryService;
+import com.limport.tms.application.query.GetTransportRequestQuery;
+import com.limport.tms.application.query.ListTransportRequestsQuery;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,13 +34,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/transport-requests")
 public class TransportRequestController {
 
-    private final ITransportRequestCommandService commandService;
-    private final ITransportRequestQueryService queryService;
+    private final ICommandBus commandBus;
+    private final IQueryBus queryBus;
 
-    public TransportRequestController(ITransportRequestCommandService commandService,
-                                      ITransportRequestQueryService queryService) {
-        this.commandService = commandService;
-        this.queryService = queryService;
+    public TransportRequestController(ICommandBus commandBus, IQueryBus queryBus) {
+        this.commandBus = commandBus;
+        this.queryBus = queryBus;
     }
 
     /**
@@ -44,7 +48,17 @@ public class TransportRequestController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TransportRequestResponse create(@Valid @RequestBody CreateTransportRequest request) {
-        return commandService.createTransportRequest(request);
+        CreateTransportRequestCommand command = new CreateTransportRequestCommand();
+        command.setCustomerId(request.getCustomerId());
+        command.setOriginLocationCode(request.getOriginLocationCode());
+        command.setDestinationLocationCode(request.getDestinationLocationCode());
+        command.setPickupFrom(request.getPickupFrom());
+        command.setDeliveryUntil(request.getDeliveryUntil());
+        command.setTotalWeight(request.getTotalWeight());
+        command.setTotalPackages(request.getTotalPackages());
+        command.setNotes(request.getNotes());
+        
+        return commandBus.dispatch(command);
     }
 
     /**
@@ -53,10 +67,8 @@ public class TransportRequestController {
     @GetMapping
     public List<TransportRequestResponse> list(
             @RequestParam(name = "status", required = false) TransportRequestStatus status) {
-        if (status == null) {
-            return queryService.listAll();
-        }
-        return queryService.listByStatus(status);
+        ListTransportRequestsQuery query = new ListTransportRequestsQuery(status);
+        return queryBus.dispatch(query);
     }
 
     /**
@@ -64,7 +76,8 @@ public class TransportRequestController {
      */
     @GetMapping("/{id}")
     public TransportRequestResponse getById(@PathVariable("id") UUID id) {
-        return queryService.getById(id);
+        GetTransportRequestQuery query = new GetTransportRequestQuery(id);
+        return queryBus.dispatch(query);
     }
 
     /**
@@ -75,7 +88,11 @@ public class TransportRequestController {
     public TransportRequestResponse cancel(
             @PathVariable("id") UUID id,
             @Valid @RequestBody CancelTransportRequestRequest request) {
-        return commandService.cancelTransportRequest(id, request);
+        CancelTransportRequestCommand command = new CancelTransportRequestCommand();
+        command.setTransportRequestId(id);
+        command.setReason(request.getReason());
+        // Now dispatch the command
+        return commandBus.dispatch(command);
     }
 
     /**
@@ -84,6 +101,10 @@ public class TransportRequestController {
     @PostMapping("/{id}/complete")
     @ResponseStatus(HttpStatus.OK)
     public TransportRequestResponse complete(@PathVariable("id") UUID id) {
-        return commandService.completeTransportRequest(id);
+        CompleteTransportRequestCommand command = new CompleteTransportRequestCommand();
+        command.setTransportRequestId(id);
+        command.setCompletedAt(java.time.Instant.now());
+        
+        return commandBus.dispatch(command);
     }
 }

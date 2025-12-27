@@ -1,10 +1,15 @@
 package com.limport.tms.presentation.rest;
 
+import com.limport.tms.application.command.AssignProviderCommand;
+import com.limport.tms.application.cqrs.ICommandBus;
+import com.limport.tms.application.cqrs.IQueryBus;
 import com.limport.tms.application.dto.request.AssignProviderRequest;
 import com.limport.tms.application.dto.response.AssignmentResponse;
 import com.limport.tms.application.dto.response.TransportRequestResponse;
-import com.limport.tms.application.service.interfaces.IAssignmentQueryService;
-import com.limport.tms.application.service.interfaces.ITransportRequestCommandService;
+import com.limport.tms.application.query.GetActiveAssignmentQuery;
+import com.limport.tms.application.query.GetAssignmentQuery;
+import com.limport.tms.application.query.ListAssignmentsByProviderQuery;
+import com.limport.tms.application.query.ListAssignmentsByTransportRequestQuery;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -25,13 +30,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/assignments")
 public class AssignmentController {
 
-    private final ITransportRequestCommandService commandService;
-    private final IAssignmentQueryService assignmentQueryService;
+    private final ICommandBus commandBus;
+    private final IQueryBus queryBus;
 
-    public AssignmentController(ITransportRequestCommandService commandService,
-                               IAssignmentQueryService assignmentQueryService) {
-        this.commandService = commandService;
-        this.assignmentQueryService = assignmentQueryService;
+    public AssignmentController(ICommandBus commandBus, IQueryBus queryBus) {
+        this.commandBus = commandBus;
+        this.queryBus = queryBus;
     }
 
     /**
@@ -43,7 +47,12 @@ public class AssignmentController {
     public TransportRequestResponse assignProvider(
             @PathVariable("id") UUID transportRequestId,
             @Valid @RequestBody AssignProviderRequest request) {
-        return commandService.assignProvider(transportRequestId, request);
+        AssignProviderCommand command = new AssignProviderCommand();
+        command.setTransportRequestId(transportRequestId);
+        command.setProviderId(request.getProviderId());
+        command.setVehicleId(request.getVehicleId());
+        
+        return commandBus.dispatch(command);
     }
 
     /**
@@ -52,7 +61,8 @@ public class AssignmentController {
     @GetMapping("/transport-requests/{id}")
     public List<AssignmentResponse> getAssignmentsByTransportRequest(
             @PathVariable("id") UUID transportRequestId) {
-        return assignmentQueryService.listByTransportRequest(transportRequestId);
+        ListAssignmentsByTransportRequestQuery query = new ListAssignmentsByTransportRequestQuery(transportRequestId);
+        return queryBus.dispatch(query);
     }
 
     /**
@@ -60,7 +70,8 @@ public class AssignmentController {
      */
     @GetMapping("/{id}")
     public AssignmentResponse getAssignment(@PathVariable("id") UUID assignmentId) {
-        return assignmentQueryService.getById(assignmentId);
+        GetAssignmentQuery query = new GetAssignmentQuery(assignmentId);
+        return queryBus.dispatch(query);
     }
 
     /**
@@ -68,7 +79,8 @@ public class AssignmentController {
      */
     @GetMapping("/transport-requests/{id}/active")
     public AssignmentResponse getActiveAssignment(@PathVariable("id") UUID transportRequestId) {
-        return assignmentQueryService.getActiveAssignment(transportRequestId);
+        GetActiveAssignmentQuery query = new GetActiveAssignmentQuery(transportRequestId);
+        return queryBus.dispatch(query);
     }
 
     /**
@@ -77,6 +89,7 @@ public class AssignmentController {
     @GetMapping("/providers/{providerId}")
     public List<AssignmentResponse> getAssignmentsByProvider(
             @PathVariable("providerId") UUID providerId) {
-        return assignmentQueryService.listByProvider(providerId);
+        ListAssignmentsByProviderQuery query = new ListAssignmentsByProviderQuery(providerId);
+        return queryBus.dispatch(query);
     }
 }

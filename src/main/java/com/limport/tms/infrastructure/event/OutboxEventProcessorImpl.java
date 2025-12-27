@@ -1,10 +1,11 @@
 package com.limport.tms.infrastructure.event;
 
-import com.limport.tms.application.ports.IOutboxEventProcessor;
+import com.limport.tms.domain.port.service.IDeadLetterService;
+import com.limport.tms.domain.port.service.IOutboxEventProcessor;
 import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.model.entity.OutboxEvent;
-import com.limport.tms.domain.ports.IEventPublisher;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
+import com.limport.tms.domain.port.messaging.IEventPublisher;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
 import com.limport.tms.infrastructure.event.publisher.KafkaEventPublisher;
 import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import org.slf4j.Logger;
@@ -31,7 +32,7 @@ public class OutboxEventProcessorImpl implements IOutboxEventProcessor {
     private final IOutboxEventRepository outboxRepository;
     private final KafkaEventPublisher eventPublisher;
     private final IUnifiedEventSerializer eventSerializer;
-    private final DeadLetterQueueService deadLetterService;
+    private final IDeadLetterService deadLetterService;
     private final EventProcessingMetrics metrics;
 
     @Value("${tms.eventprocessor.max-consecutive-failures:3}")
@@ -44,7 +45,7 @@ public class OutboxEventProcessorImpl implements IOutboxEventProcessor {
             IOutboxEventRepository outboxRepository,
             IEventPublisher eventPublisher,
             IUnifiedEventSerializer eventSerializer,
-            DeadLetterQueueService deadLetterService,
+            IDeadLetterService deadLetterService,
             EventProcessingMetrics metrics) {
         this.outboxRepository = outboxRepository;
         this.eventPublisher = (KafkaEventPublisher) eventPublisher; // Cast to access publishAsync

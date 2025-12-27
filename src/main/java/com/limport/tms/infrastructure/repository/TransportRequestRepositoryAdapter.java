@@ -2,10 +2,11 @@ package com.limport.tms.infrastructure.repository;
 
 import com.limport.tms.domain.model.entity.TransportRequest;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
-import com.limport.tms.domain.ports.ITransportRequestRepository;
-import com.limport.tms.infrastructure.persistance.mapper.TransportRequestEntityMapper;
+import com.limport.tms.domain.port.repository.ITransportRequestRepository;
+import com.limport.tms.infrastructure.persistence.entity.TransportRequestJpaEntity;
+import com.limport.tms.infrastructure.persistence.mapper.TransportRequestEntityMapper;
 import com.limport.tms.infrastructure.repository.jpa.ITransportRequestJpaRepository;
-import com.limport.tms.infrastructure.persistance.entity.TransportRequestJpaEntity;
+
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -53,6 +54,13 @@ public class TransportRequestRepositoryAdapter implements ITransportRequestRepos
     @Override
     public List<TransportRequest> findByStatus(TransportRequestStatus status) {
         return jpaRepository.findByStatus(status).stream()
+                .map(mapper::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<TransportRequest> findByStatusAndWeightLessThanEqual(TransportRequestStatus status, java.math.BigDecimal maxWeight) {
+        return jpaRepository.findByStatusAndTotalWeightLessThanEqual(status, maxWeight).stream()
                 .map(mapper::toDomain)
                 .collect(Collectors.toList());
     }

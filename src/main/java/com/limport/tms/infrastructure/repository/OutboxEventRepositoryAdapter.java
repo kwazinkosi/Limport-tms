@@ -1,10 +1,11 @@
 package com.limport.tms.infrastructure.repository;
 
 import com.limport.tms.domain.model.entity.OutboxEvent;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
-import com.limport.tms.infrastructure.persistance.mapper.OutboxEventEntityMapper;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
+import com.limport.tms.infrastructure.persistence.entity.OutboxEventJpaEntity;
+import com.limport.tms.infrastructure.persistence.mapper.OutboxEventEntityMapper;
 import com.limport.tms.infrastructure.repository.jpa.IOutboxEventJpaRepository;
-import com.limport.tms.infrastructure.persistance.entity.OutboxEventJpaEntity;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;

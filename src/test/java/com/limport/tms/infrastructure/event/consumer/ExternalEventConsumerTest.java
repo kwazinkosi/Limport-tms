@@ -2,12 +2,12 @@ package com.limport.tms.infrastructure.event.consumer;
 
 import com.limport.tms.application.event.ExternalEvent;
 import com.limport.tms.application.event.ExternalEventHandlerRegistry;
-import com.limport.tms.application.ports.IProcessedEventTracker;
+import com.limport.tms.domain.port.service.IDeadLetterService;
+import com.limport.tms.domain.port.service.IProcessedEventTracker;
 import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import com.limport.tms.domain.event.CorrelationIdContext;
-import com.limport.tms.infrastructure.event.DeadLetterQueueService;
 import com.limport.tms.infrastructure.event.EventProcessingMetrics;
-import com.limport.tms.infrastructure.persistance.entity.ExternalEventInboxEntity;
+import com.limport.tms.infrastructure.persistence.entity.ExternalEventInboxEntity;
 import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +44,7 @@ class ExternalEventConsumerTest {
     private IProcessedEventTracker processedEventTracker;
 
     @Mock
-    private DeadLetterQueueService deadLetterService;
+    private IDeadLetterService deadLetterService;
 
     @Mock
     private Acknowledgment acknowledgment;

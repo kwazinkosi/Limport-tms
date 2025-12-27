@@ -1,5 +1,6 @@
 package com.limport.tms.infrastructure.event;
 
+import com.limport.tms.domain.port.service.IDeadLetterService;
 import org.slf4j.Logger;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,10 +18,10 @@ public abstract class UnifiedEventProcessor<T> {
 
     protected final Logger log;
     protected final EventProcessingMetrics metrics;
-    protected final DeadLetterQueueService deadLetterService;
+    protected final IDeadLetterService deadLetterService;
     protected final int maxConsecutiveFailures;
 
-    protected UnifiedEventProcessor(Logger log, EventProcessingMetrics metrics, DeadLetterQueueService deadLetterService, int maxConsecutiveFailures) {
+    protected UnifiedEventProcessor(Logger log, EventProcessingMetrics metrics, IDeadLetterService deadLetterService, int maxConsecutiveFailures) {
         this.log = log;
         this.metrics = metrics;
         this.deadLetterService = deadLetterService;

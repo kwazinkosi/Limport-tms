@@ -1,7 +1,8 @@
 package com.limport.tms.infrastructure.repository.jpa;
 
 import com.limport.tms.domain.model.entity.Assignment.AssignmentStatus;
-import com.limport.tms.infrastructure.persistance.entity.AssignmentJpaEntity;
+import com.limport.tms.infrastructure.persistence.entity.AssignmentJpaEntity;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -34,6 +35,14 @@ public interface IAssignmentJpaRepository extends JpaRepository<AssignmentJpaEnt
      */
     List<AssignmentJpaEntity> findByTransportRequestIdAndStatusIn(
         UUID transportRequestId, 
+        List<AssignmentStatus> statuses
+    );
+
+    /**
+     * Find active assignments for a provider.
+     */
+    List<AssignmentJpaEntity> findByProviderIdAndStatusIn(
+        UUID providerId,
         List<AssignmentStatus> statuses
     );
 }

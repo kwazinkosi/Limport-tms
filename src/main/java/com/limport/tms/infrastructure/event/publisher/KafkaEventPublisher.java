@@ -6,7 +6,7 @@ import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.infrastructure.event.EventProcessingMetrics;
 
 import com.limport.tms.domain.event.TransportEvent;
-import com.limport.tms.domain.ports.IEventPublisher;
+import com.limport.tms.domain.port.messaging.IEventPublisher;
 import io.micrometer.core.instrument.Timer;
 
 import org.slf4j.Logger;

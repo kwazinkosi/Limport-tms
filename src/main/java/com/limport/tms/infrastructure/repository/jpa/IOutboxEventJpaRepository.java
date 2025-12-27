@@ -1,12 +1,13 @@
 package com.limport.tms.infrastructure.repository.jpa;
 
-import com.limport.tms.infrastructure.persistance.entity.OutboxEventJpaEntity;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import com.limport.tms.infrastructure.persistence.entity.OutboxEventJpaEntity;
 
 import java.time.Instant;
 import java.util.List;

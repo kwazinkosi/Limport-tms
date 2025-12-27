@@ -4,7 +4,7 @@ import com.limport.tms.application.event.InternalEventHandlerRegistry;
 import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.model.aggregate.AggregateRoot;
 import com.limport.tms.domain.model.entity.OutboxEvent;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
 import com.limport.tms.application.service.interfaces.IDomainEventService;
 import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import org.slf4j.Logger;

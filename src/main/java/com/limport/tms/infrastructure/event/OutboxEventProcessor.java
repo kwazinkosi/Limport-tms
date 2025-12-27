@@ -1,7 +1,7 @@
 package com.limport.tms.infrastructure.event;
 
-import com.limport.tms.application.ports.IOutboxEventProcessor;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
+import com.limport.tms.domain.port.service.IOutboxEventProcessor;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

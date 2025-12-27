@@ -2,12 +2,12 @@ package com.limport.tms.infrastructure.event.consumer;
 
 import com.limport.tms.application.event.ExternalEvent;
 import com.limport.tms.application.event.ExternalEventHandlerRegistry;
-import com.limport.tms.application.ports.IProcessedEventTracker;
+import com.limport.tms.domain.port.service.IDeadLetterService;
+import com.limport.tms.domain.port.service.IProcessedEventTracker;
 import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import com.limport.tms.domain.event.CorrelationIdContext;
-import com.limport.tms.infrastructure.event.DeadLetterQueueService;
 import com.limport.tms.infrastructure.event.EventProcessingMetrics;
-import com.limport.tms.infrastructure.persistance.entity.ExternalEventInboxEntity;
+import com.limport.tms.infrastructure.persistence.entity.ExternalEventInboxEntity;
 import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 
 import org.slf4j.Logger;
@@ -39,7 +39,7 @@ public class ExternalEventConsumer {
     private final EventProcessingMetrics metrics;
     private final ExternalEventHandlerRegistry handlerRegistry;
     private final IProcessedEventTracker processedEventTracker;
-    private final DeadLetterQueueService deadLetterService;
+    private final IDeadLetterService deadLetterService;
 
     @Value("${tms.kafka.topics.pms-events:pms.events}")
     private String pmsEventsTopic;
@@ -53,7 +53,7 @@ public class ExternalEventConsumer {
             EventProcessingMetrics metrics,
             ExternalEventHandlerRegistry handlerRegistry,
             IProcessedEventTracker processedEventTracker,
-            DeadLetterQueueService deadLetterService) {
+            IDeadLetterService deadLetterService) {
         this.eventSerializer = eventSerializer;
         this.inboxRepository = inboxRepository;
         this.metrics = metrics;

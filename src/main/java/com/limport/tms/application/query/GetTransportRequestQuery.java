@@ -1,11 +1,14 @@
 package com.limport.tms.application.query;
 
+import com.limport.tms.application.cqrs.IQuery;
+import com.limport.tms.application.dto.response.TransportRequestResponse;
+
 import java.util.UUID;
 
 /**
  * Query to load a single transport request by id.
  */
-public class GetTransportRequestQuery {
+public class GetTransportRequestQuery implements IQuery<TransportRequestResponse> {
 
     private UUID id;
 

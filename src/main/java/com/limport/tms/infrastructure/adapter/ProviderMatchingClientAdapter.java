@@ -1,6 +1,6 @@
 package com.limport.tms.infrastructure.adapter;
 
-import com.limport.tms.application.ports.IProviderMatchingClient;
+import com.limport.tms.domain.port.service.IProviderMatchingClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

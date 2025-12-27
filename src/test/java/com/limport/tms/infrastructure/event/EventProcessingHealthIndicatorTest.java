@@ -1,8 +1,8 @@
 package com.limport.tms.infrastructure.event;
 
-import com.limport.tms.application.ports.IDeadLetterService;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
-import com.limport.tms.infrastructure.persistance.repository.DeadLetterEventJpaRepository;
+import com.limport.tms.domain.port.service.IDeadLetterService;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
+import com.limport.tms.infrastructure.repository.jpa.DeadLetterEventJpaRepository;
 import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +22,7 @@ class EventProcessingHealthIndicatorTest {
     private DeadLetterEventJpaRepository deadLetterRepository;
 
     @Mock
-    private DeadLetterQueueService deadLetterQueueService;
+    private IDeadLetterService deadLetterService;
 
     @Mock
     private CircuitBreaker circuitBreaker;
@@ -41,7 +41,7 @@ class EventProcessingHealthIndicatorTest {
     @BeforeEach
     void setUp() {
         healthIndicator = new EventProcessingHealthIndicator(
-            deadLetterRepository, deadLetterQueueService, circuitBreaker, metrics,
+            deadLetterRepository, deadLetterService, circuitBreaker, metrics,
             outboxRepository, inboxRepository);
         
         // Set threshold values since @Value annotations don't work in plain unit tests
@@ -56,7 +56,7 @@ class EventProcessingHealthIndicatorTest {
         when(outboxRepository.countPendingEvents()).thenReturn(0L);
         when(inboxRepository.countPendingEvents()).thenReturn(0L);
         when(circuitBreaker.getState("kafka-publisher")).thenReturn(CircuitBreaker.State.CLOSED);
-        when(deadLetterQueueService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
+        when(deadLetterService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
 
         // When
         Health health = healthIndicator.health();
@@ -74,7 +74,7 @@ class EventProcessingHealthIndicatorTest {
         when(outboxRepository.countPendingEvents()).thenReturn(5L);
         when(inboxRepository.countPendingEvents()).thenReturn(0L);
         when(circuitBreaker.getState("kafka-publisher")).thenReturn(CircuitBreaker.State.CLOSED);
-        when(deadLetterQueueService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
+        when(deadLetterService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
 
         // When
         Health health = healthIndicator.health();
@@ -90,7 +90,7 @@ class EventProcessingHealthIndicatorTest {
         when(outboxRepository.countPendingEvents()).thenReturn(0L);
         when(inboxRepository.countPendingEvents()).thenReturn(3L);
         when(circuitBreaker.getState("kafka-publisher")).thenReturn(CircuitBreaker.State.CLOSED);
-        when(deadLetterQueueService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
+        when(deadLetterService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
 
         // When
         Health health = healthIndicator.health();
@@ -106,7 +106,7 @@ class EventProcessingHealthIndicatorTest {
         when(outboxRepository.countPendingEvents()).thenReturn(0L);
         when(inboxRepository.countPendingEvents()).thenReturn(0L);
         when(circuitBreaker.getState("kafka-publisher")).thenReturn(CircuitBreaker.State.CLOSED);
-        when(deadLetterQueueService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(1L, 1L, 2L));
+        when(deadLetterService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(1L, 1L, 2L));
 
         // When
         Health health = healthIndicator.health();
@@ -122,7 +122,7 @@ class EventProcessingHealthIndicatorTest {
         when(outboxRepository.countPendingEvents()).thenReturn(10L);
         when(inboxRepository.countPendingEvents()).thenReturn(7L);
         when(circuitBreaker.getState("kafka-publisher")).thenReturn(CircuitBreaker.State.CLOSED);
-        when(deadLetterQueueService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(5L, 3L, 8L));
+        when(deadLetterService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(5L, 3L, 8L));
 
         // When
         Health health = healthIndicator.health();
@@ -137,7 +137,7 @@ class EventProcessingHealthIndicatorTest {
     @Test
     void health_RepositoryThrowsException_ReturnsDownStatus() {
         // Given
-        when(deadLetterQueueService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
+        when(deadLetterService.getStats()).thenReturn(new IDeadLetterService.DeadLetterStats(0L, 0L, 0L));
         when(outboxRepository.countPendingEvents()).thenThrow(new RuntimeException("Database error"));
 
         // When & Then - The health indicator should handle the exception gracefully

@@ -2,11 +2,12 @@ package com.limport.tms.application.eventhandler;
 
 import com.limport.tms.application.event.IExternalEventHandler;
 import com.limport.tms.application.event.pms.ProviderMatchedEvent;
+import com.limport.tms.domain.event.EventTypes.Provider;
 import com.limport.tms.domain.model.entity.ProviderSuggestion;
 import com.limport.tms.domain.model.entity.TransportRequest;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
-import com.limport.tms.domain.ports.IProviderSuggestionRepository;
-import com.limport.tms.domain.ports.ITransportRequestRepository;
+import com.limport.tms.domain.port.repository.IProviderSuggestionRepository;
+import com.limport.tms.domain.port.repository.ITransportRequestRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -94,7 +95,7 @@ public class ProviderMatchedEventHandler implements IExternalEventHandler<Provid
     
     @Override
     public String getSupportedEventType() {
-        return com.limport.tms.domain.event.EventTypes.Provider.MATCHED;
+        return Provider.MATCHED;
     }
     
     @Override

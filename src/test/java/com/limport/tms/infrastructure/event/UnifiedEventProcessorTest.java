@@ -1,5 +1,6 @@
 package com.limport.tms.infrastructure.event;
 
+import com.limport.tms.domain.port.service.IDeadLetterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,7 +27,7 @@ class UnifiedEventProcessorTest {
     private EventProcessingMetrics metrics;
 
     @Mock
-    private DeadLetterQueueService deadLetterService;
+    private IDeadLetterService deadLetterService;
 
     private TestUnifiedEventProcessor processor;
 
@@ -136,7 +137,7 @@ class UnifiedEventProcessorTest {
         private RuntimeException processingException;
 
         public TestUnifiedEventProcessor(Logger log, EventProcessingMetrics metrics,
-                                       DeadLetterQueueService deadLetterService, int maxConsecutiveFailures) {
+                                       IDeadLetterService deadLetterService, int maxConsecutiveFailures) {
             super(log, metrics, deadLetterService, maxConsecutiveFailures);
         }
 

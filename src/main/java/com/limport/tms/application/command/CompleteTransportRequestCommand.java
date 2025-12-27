@@ -1,12 +1,15 @@
 package com.limport.tms.application.command;
 
+import com.limport.tms.application.cqrs.ICommand;
+import com.limport.tms.application.dto.response.TransportRequestResponse;
+
 import java.time.Instant;
 import java.util.UUID;
 
 /**
  * Command representing the completion of a transport request.
  */
-public class CompleteTransportRequestCommand {
+public class CompleteTransportRequestCommand implements ICommand<TransportRequestResponse> {
 
     private UUID transportRequestId;
     private Instant completedAt;

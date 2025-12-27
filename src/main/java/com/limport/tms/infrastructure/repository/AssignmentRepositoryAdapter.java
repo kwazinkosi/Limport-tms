@@ -2,9 +2,9 @@ package com.limport.tms.infrastructure.repository;
 
 import com.limport.tms.domain.model.entity.Assignment;
 import com.limport.tms.domain.model.entity.Assignment.AssignmentStatus;
-import com.limport.tms.domain.ports.IAssignmentRepository;
-import com.limport.tms.infrastructure.persistance.entity.AssignmentJpaEntity;
-import com.limport.tms.infrastructure.persistance.mapper.AssignmentEntityMapper;
+import com.limport.tms.domain.port.repository.IAssignmentRepository;
+import com.limport.tms.infrastructure.persistence.entity.AssignmentJpaEntity;
+import com.limport.tms.infrastructure.persistence.mapper.AssignmentEntityMapper;
 import com.limport.tms.infrastructure.repository.jpa.IAssignmentJpaRepository;
 import org.springframework.stereotype.Component;
 
@@ -74,6 +74,19 @@ public class AssignmentRepositoryAdapter implements IAssignmentRepository {
             AssignmentStatus.IN_PROGRESS
         );
         return jpaRepository.findByTransportRequestIdAndStatusIn(transportRequestId, activeStatuses)
+            .stream()
+            .map(AssignmentJpaEntity::toDomain)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Assignment> findActiveByProviderId(UUID providerId) {
+        List<AssignmentStatus> activeStatuses = List.of(
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.CONFIRMED,
+            AssignmentStatus.IN_PROGRESS
+        );
+        return jpaRepository.findByProviderIdAndStatusIn(providerId, activeStatuses)
             .stream()
             .map(AssignmentJpaEntity::toDomain)
             .collect(Collectors.toList());

@@ -1,12 +1,15 @@
 package com.limport.tms.application.command;
 
+import com.limport.tms.application.cqrs.ICommand;
+import com.limport.tms.application.dto.response.TransportRequestResponse;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
  * Command representing the intent to create a new transport request.
  */
-public class CreateTransportRequestCommand {
+public class CreateTransportRequestCommand implements ICommand<TransportRequestResponse> {
 
     private String customerId;
     private String originLocationCode;

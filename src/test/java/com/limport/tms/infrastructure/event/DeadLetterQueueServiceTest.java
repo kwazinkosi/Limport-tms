@@ -1,10 +1,10 @@
 package com.limport.tms.infrastructure.event;
 
 import com.limport.tms.domain.model.entity.OutboxEvent;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
-import com.limport.tms.infrastructure.persistance.entity.DeadLetterEventEntity;
-import com.limport.tms.infrastructure.persistance.entity.ExternalEventInboxEntity;
-import com.limport.tms.infrastructure.persistance.repository.DeadLetterEventJpaRepository;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
+import com.limport.tms.infrastructure.persistence.entity.DeadLetterEventEntity;
+import com.limport.tms.infrastructure.persistence.entity.ExternalEventInboxEntity;
+import com.limport.tms.infrastructure.repository.jpa.DeadLetterEventJpaRepository;
 import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

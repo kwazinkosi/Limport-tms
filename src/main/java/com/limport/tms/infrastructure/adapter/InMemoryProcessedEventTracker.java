@@ -1,6 +1,6 @@
 package com.limport.tms.infrastructure.adapter;
 
-import com.limport.tms.application.ports.IProcessedEventTracker;
+import com.limport.tms.domain.port.service.IProcessedEventTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

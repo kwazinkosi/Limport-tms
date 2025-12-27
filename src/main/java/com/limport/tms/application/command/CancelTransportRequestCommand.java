@@ -1,11 +1,14 @@
 package com.limport.tms.application.command;
 
+import com.limport.tms.application.cqrs.ICommand;
+import com.limport.tms.application.dto.response.TransportRequestResponse;
+
 import java.util.UUID;
 
 /**
  * Command representing the intent to cancel a transport request.
  */
-public class CancelTransportRequestCommand {
+public class CancelTransportRequestCommand implements ICommand<TransportRequestResponse> {
 
     private UUID transportRequestId;
     private String reason;

@@ -1,6 +1,6 @@
 package com.limport.tms.infrastructure.adapter;
 
-import com.limport.tms.application.ports.IAsyncExecutor;
+import com.limport.tms.domain.port.service.IAsyncExecutor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +30,7 @@ public class AsyncExecutorAdapter implements IAsyncExecutor {
     }
     
     @Override
-    public CompletableFuture<Void> runAsync(Runnable task) {
+    public CompletableFuture<Void> executeAsync(Runnable task) {
         return CompletableFuture.runAsync(task, executor);
     }
 }

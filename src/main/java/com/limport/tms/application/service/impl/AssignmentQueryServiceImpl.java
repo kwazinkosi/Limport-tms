@@ -4,7 +4,7 @@ import com.limport.tms.application.dto.response.AssignmentResponse;
 import com.limport.tms.application.mapper.AssignmentMapper;
 import com.limport.tms.application.service.interfaces.IAssignmentQueryService;
 import com.limport.tms.domain.model.entity.Assignment;
-import com.limport.tms.domain.ports.IAssignmentRepository;
+import com.limport.tms.domain.port.repository.IAssignmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

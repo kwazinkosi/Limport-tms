@@ -1,12 +1,15 @@
 package com.limport.tms.application.command;
 
+import com.limport.tms.application.cqrs.ICommand;
+import com.limport.tms.application.dto.response.TransportRequestResponse;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
  * Command to assign an existing transport request to a provider and vehicle.
  */
-public class AssignProviderToTransportRequestCommand {
+public class AssignProviderToTransportRequestCommand implements ICommand<TransportRequestResponse> {
 
     private UUID transportRequestId;
     private String providerId;

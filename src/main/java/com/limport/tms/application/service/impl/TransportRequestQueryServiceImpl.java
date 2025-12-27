@@ -5,7 +5,7 @@ import com.limport.tms.application.mapper.TransportRequestMapper;
 import com.limport.tms.application.service.interfaces.ITransportRequestQueryService;
 import com.limport.tms.domain.model.entity.TransportRequest;
 import com.limport.tms.domain.model.enums.TransportRequestStatus;
-import com.limport.tms.domain.ports.ITransportRequestRepository;
+import com.limport.tms.domain.port.repository.ITransportRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

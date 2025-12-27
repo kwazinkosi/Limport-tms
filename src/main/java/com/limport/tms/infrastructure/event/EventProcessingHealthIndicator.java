@@ -1,8 +1,8 @@
 package com.limport.tms.infrastructure.event;
 
-import com.limport.tms.application.ports.IDeadLetterService;
-import com.limport.tms.domain.ports.IOutboxEventRepository;
-import com.limport.tms.infrastructure.persistance.repository.DeadLetterEventJpaRepository;
+import com.limport.tms.domain.port.service.IDeadLetterService;
+import com.limport.tms.domain.port.repository.IOutboxEventRepository;
+import com.limport.tms.infrastructure.repository.jpa.DeadLetterEventJpaRepository;
 import com.limport.tms.infrastructure.repository.jpa.ExternalEventInboxJpaRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.health.Health;
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 public class EventProcessingHealthIndicator implements HealthIndicator {
 
     private final DeadLetterEventJpaRepository deadLetterRepository;
-    private final DeadLetterQueueService deadLetterQueueService;
+    private final IDeadLetterService deadLetterService;
     private final CircuitBreaker circuitBreaker;
     private final EventProcessingMetrics metrics;
     private final IOutboxEventRepository outboxRepository;
@@ -34,13 +34,13 @@ public class EventProcessingHealthIndicator implements HealthIndicator {
 
     public EventProcessingHealthIndicator(
             DeadLetterEventJpaRepository deadLetterRepository,
-            DeadLetterQueueService deadLetterQueueService,
+            IDeadLetterService deadLetterService,
             CircuitBreaker circuitBreaker,
             EventProcessingMetrics metrics,
             IOutboxEventRepository outboxRepository,
             ExternalEventInboxJpaRepository inboxRepository) {
         this.deadLetterRepository = deadLetterRepository;
-        this.deadLetterQueueService = deadLetterQueueService;
+        this.deadLetterService = deadLetterService;
         this.circuitBreaker = circuitBreaker;
         this.metrics = metrics;
         this.outboxRepository = outboxRepository;
@@ -49,7 +49,7 @@ public class EventProcessingHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
-        IDeadLetterService.DeadLetterStats deadLetterStats = deadLetterQueueService.getStats();
+        IDeadLetterService.DeadLetterStats deadLetterStats = deadLetterService.getStats();
 
         // Check dead letter queue size
         long deadLetterCount = deadLetterStats.totalUnprocessed;

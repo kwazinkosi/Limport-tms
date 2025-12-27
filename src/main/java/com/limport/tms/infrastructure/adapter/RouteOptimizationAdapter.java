@@ -2,7 +2,7 @@ package com.limport.tms.infrastructure.adapter;
 
 import com.limport.tms.application.service.interfaces.IDomainEventService;
 import com.limport.tms.domain.event.states.TransportRouteOptimizedEvent;
-import com.limport.tms.domain.ports.IRouteValidator;
+import com.limport.tms.domain.port.service.IRouteValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
