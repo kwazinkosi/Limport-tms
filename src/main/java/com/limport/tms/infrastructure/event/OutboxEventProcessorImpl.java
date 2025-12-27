@@ -5,6 +5,7 @@ import com.limport.tms.domain.event.IDomainEvent;
 import com.limport.tms.domain.model.entity.OutboxEvent;
 import com.limport.tms.domain.ports.IEventPublisher;
 import com.limport.tms.domain.ports.IOutboxEventRepository;
+import com.limport.tms.infrastructure.event.publisher.KafkaEventPublisher;
 import com.limport.tms.application.service.interfaces.IUnifiedEventSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,40 +13,121 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Infrastructure implementation of outbox event processing.
  * Handles the actual processing and publishing of events from the outbox.
+ * 
+ * Uses asynchronous Kafka publishing to avoid blocking the processing thread.
  */
 @Service
-public class OutboxEventProcessorImpl extends UnifiedEventProcessor<OutboxEvent> implements IOutboxEventProcessor {
+public class OutboxEventProcessorImpl implements IOutboxEventProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxEventProcessorImpl.class);
 
     private final IOutboxEventRepository outboxRepository;
-    private final IEventPublisher eventPublisher;
+    private final KafkaEventPublisher eventPublisher;
     private final IUnifiedEventSerializer eventSerializer;
+    private final DeadLetterQueueService deadLetterService;
+    private final EventProcessingMetrics metrics;
+
+    @Value("${tms.eventprocessor.max-consecutive-failures:3}")
+    private int maxConsecutiveFailures;
+
+    @Value("${tms.outbox.publish.timeout-seconds:30}")
+    private int publishTimeoutSeconds;
 
     public OutboxEventProcessorImpl(
             IOutboxEventRepository outboxRepository,
             IEventPublisher eventPublisher,
             IUnifiedEventSerializer eventSerializer,
             DeadLetterQueueService deadLetterService,
-            EventProcessingMetrics metrics,
-            @Value("${tms.eventprocessor.max-consecutive-failures:3}") int maxConsecutiveFailures) {
-        super(log, metrics, deadLetterService, maxConsecutiveFailures);
+            EventProcessingMetrics metrics) {
         this.outboxRepository = outboxRepository;
-        this.eventPublisher = eventPublisher;
+        this.eventPublisher = (KafkaEventPublisher) eventPublisher; // Cast to access publishAsync
         this.eventSerializer = eventSerializer;
+        this.deadLetterService = deadLetterService;
+        this.metrics = metrics;
     }
 
     @Override
-    protected List<OutboxEvent> findPendingEvents(int batchSize) {
-        return outboxRepository.findPendingEvents(batchSize);
+    public int processPendingEvents(int batchSize) {
+        List<OutboxEvent> pendingEvents = outboxRepository.findPendingEvents(batchSize);
+        if (pendingEvents.isEmpty()) {
+            return 0;
+        }
+
+        log.debug("Processing {} outbox events", pendingEvents.size());
+
+        // Process events asynchronously
+        List<EventPublishResult> results = pendingEvents.stream()
+            .map(this::processEventAsync)
+            .collect(Collectors.toList());
+
+        // Wait for all async operations to complete
+        CompletableFuture.allOf(results.stream()
+            .map(result -> result.future)
+            .toArray(CompletableFuture[]::new))
+            .join();
+
+        // Process results
+        int successCount = 0;
+        int consecutiveFailures = 0;
+
+        for (EventPublishResult result : results) {
+            try {
+                // Wait for individual result with timeout
+                result.future.get(publishTimeoutSeconds, TimeUnit.SECONDS);
+                
+                // Success - mark as processed
+                result.event.markAsProcessed();
+                outboxRepository.update(result.event);
+                successCount++;
+                consecutiveFailures = 0;
+                metrics.recordDomainEventPublished();
+                
+                log.debug("Successfully published event: {} for aggregate {}",
+                    result.event.getEventType(), result.event.getAggregateId());
+                
+            } catch (Exception e) {
+                // Failure - handle dead letter
+                consecutiveFailures++;
+                metrics.recordDomainEventFailed();
+                
+                deadLetterService.storeFailedEvent(
+                    result.event.getId().toString(),
+                    result.event.getEventType(),
+                    result.event.getPayload(),
+                    "OUTBOX",
+                    e.getMessage()
+                );
+                result.event.markAsFailed(e.getMessage());
+                outboxRepository.update(result.event);
+                
+                log.error("Failed to publish outbox event {}: {}", result.event.getId(), e.getMessage());
+                
+                // Break on too many consecutive failures
+                if (consecutiveFailures >= maxConsecutiveFailures) {
+                    log.warn("Breaking batch processing after {} consecutive failures", consecutiveFailures);
+                    break;
+                }
+            }
+        }
+
+        if (successCount > 0) {
+            log.info("Processed {}/{} outbox events", successCount, pendingEvents.size());
+        }
+
+        return successCount;
     }
 
-    @Override
-    protected boolean processEvent(OutboxEvent outboxEvent) {
+    /**
+     * Processes a single event asynchronously.
+     */
+    private EventPublishResult processEventAsync(OutboxEvent outboxEvent) {
         try {
             // Deserialize the event
             IDomainEvent domainEvent = eventSerializer.deserialize(
@@ -53,49 +135,29 @@ public class OutboxEventProcessorImpl extends UnifiedEventProcessor<OutboxEvent>
                 outboxEvent.getEventType()
             );
 
-            // Publish to message broker
-            eventPublisher.publish(domainEvent);
-
-            // Mark as processed
-            outboxEvent.markAsProcessed();
-            outboxRepository.update(outboxEvent);
-
-            log.debug("Published event: {} for aggregate {}",
-                outboxEvent.getEventType(), outboxEvent.getAggregateId());
-
-            return true;
-
+            // Start async publish
+            CompletableFuture<Void> future = eventPublisher.publishAsync(domainEvent);
+            
+            return new EventPublishResult(outboxEvent, future);
+            
         } catch (Exception e) {
-            log.error("Failed to process outbox event {}: {}", outboxEvent.getId(), e.getMessage());
-            throw e; // Let UnifiedEventProcessor handle the failure
+            // Deserialization failed - create failed future
+            CompletableFuture<Void> failedFuture = new CompletableFuture<>();
+            failedFuture.completeExceptionally(e);
+            return new EventPublishResult(outboxEvent, failedFuture);
         }
     }
 
-    @Override
-    protected String getEventId(OutboxEvent event) {
-        return event.getId().toString();
-    }
+    /**
+     * Helper class to hold event and its publish future.
+     */
+    private static class EventPublishResult {
+        final OutboxEvent event;
+        final CompletableFuture<Void> future;
 
-    @Override
-    protected void handleProcessingFailure(OutboxEvent event, Exception e) {
-        deadLetterService.storeFailedEvent(
-            event.getId().toString(),
-            event.getEventType(),
-            event.getPayload(),
-            "OUTBOX",
-            e.getMessage()
-        );
-        event.markAsFailed(e.getMessage());
-        outboxRepository.update(event);
-    }
-
-    @Override
-    protected void recordSuccess() {
-        metrics.recordDomainEventPublished();
-    }
-
-    @Override
-    protected void recordFailure() {
-        metrics.recordDomainEventFailed();
+        EventPublishResult(OutboxEvent event, CompletableFuture<Void> future) {
+            this.event = event;
+            this.future = future;
+        }
     }
 }
